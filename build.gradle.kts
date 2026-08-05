@@ -89,7 +89,12 @@ allprojects {
 loom {
     accessWidenerPath = file("src/main/resources/liquidbounce.accesswidener")
 }
-
+configurations.all {
+    exclude(group = "org.lwjgl")
+    exclude(group = "org.jetbrains.skiko")
+    exclude(group = "java.awt")
+    exclude(group = "javax.swing")
+}
 dependencies {
     // Minecraft
     minecraft(libs.minecraft)
