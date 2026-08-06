@@ -12,7 +12,6 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU General Public License for more details.
- *
  * You should have received a copy of the GNU General Public License
  * along with LiquidBounce. If not, see <https://www.gnu.org/licenses/>.
  */
@@ -27,6 +26,7 @@ import net.ccbluex.liquidbounce.event.events.ClickGuiValueChangeEvent
 import net.ccbluex.liquidbounce.event.events.DisconnectEvent
 import net.ccbluex.liquidbounce.event.events.GameTickEvent
 import net.ccbluex.liquidbounce.event.events.WorldChangeEvent
+import net.ccbluex.liquidbounce.event.events.KeyboardKeyEvent
 import net.ccbluex.liquidbounce.event.handler
 import net.ccbluex.liquidbounce.event.sequenceHandler
 import net.ccbluex.liquidbounce.event.waitSeconds
@@ -49,7 +49,7 @@ import org.lwjgl.glfw.GLFW
  */
 
 object ModuleClickGui :
-    ClientModule("ClickGUI", ModuleCategories.RENDER, bind = GLFW.GLFW_KEY_RIGHT_SHIFT, disableActivation = true) {
+    ClientModule("ClickGUI", ModuleCategories.RENDER, bind = GLFW.GLFW_KEY_RIGHT_SHIFT, disableActivation = false) {
 
     override val running get() = true
 
@@ -70,7 +70,7 @@ object ModuleClickGui :
                 return false
             }
 
-            val screen = mc.gui.screen() ?: return false
+            val screen = mc.screen ?: return false
             return screen is CustomSharedMinecraftScreen && screen.screenType == CustomScreenType.CLICK_GUI ||
                 screen is CustomStandaloneMinecraftScreen && screen.screenType == CustomScreenType.CLICK_GUI
         }
@@ -105,12 +105,17 @@ object ModuleClickGui :
     private val browserReadyHandler = handler<BrowserReadyEvent>(priority = READ_FINAL_STATE) {
         tree(ScreenManager.browserSettings)
     }
-
-    // ========== 唯一修改：直接返回，不执行任何操作 ==========
-    override fun onEnabled() {
-        return
+    private val keyHandler = handler<KeyboardKeyEvent> { event ->
+        if (event.action == 1 && (event.keyCode == GLFW.GLFW_KEY_RIGHT_SHIFT || event.keyCode == 54) && mc.screen == null) {
+            mc.setScreen(ClickGuiScreen())
+        }
     }
-    // ========================================================
+
+    override fun onEnabled() {
+        if (!LiquidBounce.isInitialized) return
+        mc.setScreen(ClickGuiScreen())
+        super.onEnabled()
+    }
 
     @Suppress("unused")
     private val worldChangeHandler = sequenceHandler<WorldChangeEvent>(
@@ -135,7 +140,7 @@ object ModuleClickGui :
     @Suppress("unused")
     private val tickHandler = handler<GameTickEvent> {
         // For some reason, we actually need this.
-        standaloneScreen?.browser?.visible = mc.gui.screen() == standaloneScreen
+        standaloneScreen?.browser?.visible = mc.screen == standaloneScreen
     }
 
     fun updateStandaloneScreen(): Boolean {
@@ -165,19 +170,20 @@ object ModuleClickGui :
 
     fun invalidate() {
         val standaloneScreen = standaloneScreen ?: return
-        val wasOpen = mc.gui.screen() == standaloneScreen
+        val wasOpen = mc.screen == standaloneScreen
 
         // Close and invalidate old cache
         if (wasOpen) {
-            mc.gui.setScreen(null)
+            mc.setScreen(null)
         }
         standaloneScreen.close()
         this.standaloneScreen = null
-
+        
         // Only bother updating now if it was open before.
         if (wasOpen) {
             updateStandaloneScreen()
-            mc.gui.setScreen(this.standaloneScreen ?: CustomSharedMinecraftScreen(CustomScreenType.CLICK_GUI))
+            mc.setScreen(this.standaloneScreen ?: CustomSharedMinecraftScreen(CustomScreenType.CLICK_GUI))
         }
     }
+
 }
