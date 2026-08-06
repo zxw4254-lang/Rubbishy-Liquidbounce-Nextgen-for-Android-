@@ -40,7 +40,7 @@ import net.ccbluex.liquidbounce.integration.screen.impl.CustomStandaloneMinecraf
 import net.ccbluex.liquidbounce.utils.client.inGame
 import net.ccbluex.liquidbounce.utils.kotlin.EventPriorityConvention.OBJECTION_AGAINST_EVERYTHING
 import net.ccbluex.liquidbounce.utils.kotlin.EventPriorityConvention.READ_FINAL_STATE
-import net.minecraft.text.Text
+import net.minecraft.text.Text  // 添加这一行
 import org.lwjgl.glfw.GLFW
 
 /**
@@ -51,10 +51,6 @@ import org.lwjgl.glfw.GLFW
 
 object ModuleClickGui :
     ClientModule("ClickGUI", ModuleCategories.RENDER, bind = GLFW.GLFW_KEY_RIGHT_SHIFT, disableActivation = true) {
-
-    // ========== Android 专用开关 ==========
-    private const val ANDROID_BUILD = true
-    // ======================================
 
     override val running get() = true
 
@@ -111,29 +107,21 @@ object ModuleClickGui :
         tree(ScreenManager.browserSettings)
     }
 
+    // ==================== 唯一修改的地方 ====================
     override fun onEnabled() {
-        // Android 专用：不打开任何 GUI，只提示用户使用命令
-        if (ANDROID_BUILD) {
-            mc.player?.sendMessage(Text.literal("§cClickGUI 在安卓版中不可用，请使用 .toggle 命令或绑定快捷键开关模块。"), false)
-            return
-        }
-
-        if (!LiquidBounce.isInitialized || !inGame) {
-            return
-        }
-
-        updateStandaloneScreen()
-        mc.execute {
-            mc.gui.setScreen(standaloneScreen ?: CustomSharedMinecraftScreen(CustomScreenType.CLICK_GUI))
-        }
-        super.onEnabled()
+        // Android 专用：不打开任何 GUI，只发送提示消息
+        mc.player?.sendMessage(Text.literal("§cClickGUI 在安卓版中不可用，请使用 .toggle 命令或绑定快捷键开关模块。"), false)
+        // 不调用 updateStandaloneScreen()，也不设置任何屏幕
+        // 不调用 super.onEnabled()
+        return
     }
+    // ========================================================
 
     @Suppress("unused")
     private val worldChangeHandler = sequenceHandler<WorldChangeEvent>(
         priority = OBJECTION_AGAINST_EVERYTHING
     ) { event ->
-        if (event.world == null || !useStandaloneScreen || ANDROID_BUILD) {
+        if (event.world == null || !useStandaloneScreen) {
             return@sequenceHandler
         }
 
@@ -145,20 +133,17 @@ object ModuleClickGui :
 
     @Suppress("unused")
     private val disconnectHandler = handler<DisconnectEvent> {
-        if (ANDROID_BUILD) return@handler
         standaloneScreen?.close()
         standaloneScreen = null
     }
 
     @Suppress("unused")
     private val tickHandler = handler<GameTickEvent> {
-        if (ANDROID_BUILD) return@handler
         // For some reason, we actually need this.
         standaloneScreen?.browser?.visible = mc.gui.screen() == standaloneScreen
     }
 
     fun updateStandaloneScreen(): Boolean {
-        if (ANDROID_BUILD) return false
         // Standalone Screen Cache
         if (useStandaloneScreen) {
             if (standaloneScreen == null) {
@@ -176,7 +161,6 @@ object ModuleClickGui :
     }
 
     fun sync() {
-        if (ANDROID_BUILD) return
         if (!LiquidBounce.isInitialized) {
             return
         }
@@ -185,7 +169,6 @@ object ModuleClickGui :
     }
 
     fun invalidate() {
-        if (ANDROID_BUILD) return
         val standaloneScreen = standaloneScreen ?: return
         val wasOpen = mc.gui.screen() == standaloneScreen
 
