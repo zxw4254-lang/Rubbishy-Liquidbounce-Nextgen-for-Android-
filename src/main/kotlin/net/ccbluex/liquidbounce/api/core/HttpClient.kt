@@ -33,7 +33,8 @@ import net.ccbluex.liquidbounce.authlib.mojangapi.MojangApiClient
 import net.ccbluex.liquidbounce.config.gson.interopGson
 import net.ccbluex.liquidbounce.config.gson.util.readJson
 import net.ccbluex.liquidbounce.mcef.MCEF
-import net.ccbluex.liquidbounce.mcef.listeners.OkHttpProgressInterceptor
+// MCEF imports handled via reflection for Android compatibility
+// import net.ccbluex.liquidbounce.mcef.listeners.OkHttpProgressInterceptor
 import net.ccbluex.liquidbounce.utils.client.error.ErrorHandler
 import net.ccbluex.liquidbounce.utils.client.logger
 import net.ccbluex.liquidbounce.utils.client.mc
@@ -192,7 +193,7 @@ object HttpClient {
         agent: String = DEFAULT_AGENT,
         headers: Headers.Builder.() -> Unit = {},
         body: RequestBody? = null,
-        progressListener: OkHttpProgressInterceptor.ProgressListener? = null
+        progressListener: Any? = null // OkHttpProgressInterceptor.ProgressListener - use Any? for Android compat
     ): Response {
         val request = Request.Builder()
             .url(url)
@@ -204,10 +205,21 @@ object HttpClient {
         return if (progressListener == null) {
             client.newCall(request).executeAsync()
         } else {
-            client.newBuilder()
-                .addNetworkInterceptor(OkHttpProgressInterceptor(progressListener))
-                .build()
-                .newCall(request).executeAsync()
+            try {
+                // Use reflection to create OkHttpProgressInterceptor for progress tracking
+                val interceptorClass = Class.forName("net.ccbluex.liquidbounce.mcef.listeners.OkHttpProgressInterceptor")
+                // ProgressListener is an inner interface, get its Class object
+                val progressListenerClass = Class.forName("net.ccbluex.liquidbounce.mcef.listeners.OkHttpProgressInterceptor\$ProgressListener")
+                val constructor = interceptorClass.getConstructor(progressListenerClass)
+                val interceptor = constructor.newInstance(progressListener) as Interceptor
+                client.newBuilder()
+                    .addNetworkInterceptor(interceptor)
+                    .build()
+                    .newCall(request).executeAsync()
+            } catch (e: Exception) {
+                logger.debug("OkHttpProgressInterceptor not available, falling back to standard request", e)
+                client.newCall(request).executeAsync()
+            }
         }
     }
 
@@ -215,7 +227,7 @@ object HttpClient {
         url: String,
         file: File,
         agent: String = DEFAULT_AGENT,
-        progressListener: OkHttpProgressInterceptor.ProgressListener? = null
+        progressListener: Any? = null // OkHttpProgressInterceptor.ProgressListener - use Any? for Android compat
     ) = withContext(Dispatchers.IO) {
         request(url, HttpMethod.GET, agent, progressListener = progressListener).toFile(file)
     }
