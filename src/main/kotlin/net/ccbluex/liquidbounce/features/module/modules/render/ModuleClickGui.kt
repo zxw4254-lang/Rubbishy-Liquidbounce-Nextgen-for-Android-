@@ -40,7 +40,6 @@ import net.ccbluex.liquidbounce.integration.screen.impl.CustomStandaloneMinecraf
 import net.ccbluex.liquidbounce.utils.client.inGame
 import net.ccbluex.liquidbounce.utils.kotlin.EventPriorityConvention.OBJECTION_AGAINST_EVERYTHING
 import net.ccbluex.liquidbounce.utils.kotlin.EventPriorityConvention.READ_FINAL_STATE
-import net.minecraft.text.Text  // 添加这一行
 import org.lwjgl.glfw.GLFW
 
 /**
@@ -107,12 +106,8 @@ object ModuleClickGui :
         tree(ScreenManager.browserSettings)
     }
 
-    // ==================== 唯一修改的地方 ====================
+    // ========== 唯一修改：直接返回，不执行任何操作 ==========
     override fun onEnabled() {
-        // Android 专用：不打开任何 GUI，只发送提示消息
-        mc.player?.sendMessage(Text.literal("§cClickGUI 在安卓版中不可用，请使用 .toggle 命令或绑定快捷键开关模块。"), false)
-        // 不调用 updateStandaloneScreen()，也不设置任何屏幕
-        // 不调用 super.onEnabled()
         return
     }
     // ========================================================
