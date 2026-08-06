@@ -18,6 +18,7 @@
  */
 package net.ccbluex.liquidbounce.features.module.modules.render
 
+import net.minecraft.text.Text
 import net.ccbluex.liquidbounce.LiquidBounce
 import net.ccbluex.liquidbounce.config.types.group.ToggleableValueGroup
 import net.ccbluex.liquidbounce.event.EventManager
@@ -107,9 +108,10 @@ object ModuleClickGui :
     }
 
     override fun onEnabled() {
-        if (!LiquidBounce.isInitialized || !inGame) {
-            return
-        }
+    // 安卓专用：禁用图形界面，只提示命令用法
+    mc.player?.sendMessage(Text.literal("§cClickGUI 在安卓版中不可用，请使用 .toggle 命令或绑定快捷键开关模块。"), false)
+    return
+    }
 
         updateStandaloneScreen()
         mc.execute {
