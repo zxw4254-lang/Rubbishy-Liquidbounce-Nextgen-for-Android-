@@ -98,7 +98,9 @@ configurations.all {
 dependencies {
     // Minecraft
     minecraft(libs.minecraft)
-
+    mappings {
+    officialMojangMappings()
+}
     // Fabric
     api(libs.fabric.loader)
     api(libs.fabric.api)
