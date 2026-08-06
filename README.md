@@ -10,7 +10,7 @@
 [X](https://x.com/CCBlueX)
 </div>
 
-LiquidBounce is a free and open-source mixin-based injection hacked client using the Fabric API for Minecraft.
+PojavBounceNew is a free and open-source mixin-based injection hacked client using the Fabric API for Minecraft.And it based on Rubbishy-Liquidbounce-NextGen For Android.I use DeepSeek to develop this project.I want the latest LiquidBounce NextGen can work on Android.
 
 ## Issues
 
