@@ -98,9 +98,7 @@ configurations.all {
 dependencies {
     // Minecraft
     minecraft(libs.minecraft)
-    mappings {
-    officialMojangMappings()
-}
+    
     // Fabric
     api(libs.fabric.loader)
     api(libs.fabric.api)
@@ -174,6 +172,10 @@ dependencies {
     testImplementation(kotlin("test"))
     testImplementation(libs.fabric.loader.junit)
     testImplementation(libs.kotlinx.coroutines.test)
+
+    modImplementation(loom.lwjgl("org.lwjgl:lwjgl-glfw"))
+    modImplementation(loom.lwjgl("org.lwjgl:lwjgl"))
+    modImplementation(loom.lwjgl("org.lwjgl:lwjgl-util"))
 }
 
 addResolvedDependencies(jij, "compileOnly", "include", "api")
