@@ -57,23 +57,11 @@ object BrowserBackendManager : EventListener {
      * when the dependencies are available.
      */
     fun makeDependenciesAvailable(taskManager: TaskManager) {
-        if (isBrowserDisabled) {
-            logger.warn("Environment variable 'LB_BROWSER_SKIP' is set to 'true'.")
-            return
-        }
-
-        val browserBackend = when (browserBackend) {
-            "none" -> {
-                logger.warn("Environment variable 'LB_BROWSER_BACKEND' is set to 'none'.")
-                isBrowserDisabled = true
-                return
-            }
-            "cef" -> CefBrowserBackend()
-            "external" -> ExternalSystemBrowserBackend()
-            else -> error("Unknown browser backend: $browserBackend")
-        }
-        this.backend = browserBackend
-        browserBackend.makeDependenciesAvailable(taskManager, ::start)
+    // Android专用版本：直接禁用浏览器后端
+    logger.warn("Android build: disabling browser backend.")
+    isBrowserDisabled = true
+    // 不进行任何初始化
+    return
     }
 
     /**
