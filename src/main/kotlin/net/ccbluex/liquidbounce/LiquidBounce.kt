@@ -113,6 +113,11 @@ object LiquidBounce : EventListener {
     const val CLIENT_NAME = "LiquidBounce"
     const val CLIENT_AUTHOR = "CCBlueX"
 
+    // ========== Android 专用开关 ==========
+    // 设为 true 构建 Android 版，禁用所有浏览器/主题/交互服务器/深度学习/市场更新
+    private const val ANDROID_BUILD = true
+    // ======================================
+
     private object Client : Config("Client") {
         val version = text("Version", GitInfo.version())
             .immutable()
@@ -375,32 +380,70 @@ object LiquidBounce : EventListener {
     ) = withContext(dispatcher) {
         RenderSystem.assertOnRenderThread()
 
-        // Android 专用：完全禁用 JCEF、主题、交互服务器、深度学习、市场更新
-logger.info("Android build: skipping all JCEF/web components.")
+        if (!ANDROID_BUILD) {
+            BrowserBackendManager.init()
+            ClientInteropServer.start()
+            if (!ClientInteropServer.isSkipping) {
+                ThemeManager.init()
+                // Preload marketplace items
+                ConfigSystem.load(MarketplaceManager)
+                ConfigSystem.load(ThemeManager)
+                ThemeManager.load()
+            }
+        }
 
-// 仅保留必需的渲染组件
-BlurEffectRenderer
-ScreenManager
+        BlurEffectRenderer
+        ScreenManager
 
-// 任务管理器：只创建一个占位任务，避免屏幕管理器卡住
-taskManager = TaskManager(ioScope).apply {
-    launch("AndroidPlaceholder") { 
-        // 什么都不做，直接标记完成
-        isCompleted = true
-    }
-    // 不调用 BrowserBackendManager.makeDependenciesAvailable
-    // 不启动 DeepLearning 和 Marketplace 任务
-}
+        if (!ANDROID_BUILD) {
+            taskManager = TaskManager(ioScope).apply {
+                // Either immediately starts browser or spawns a task to request browser dependencies,
+                // and then starts the browser through render thread.
+                BrowserBackendManager.makeDependenciesAvailable(this)
 
-// 字体管理器仍然需要（不依赖 JCEF）
-val duration = measureTime {
-    FontManager.createGlyphManager()
-}
-logger.info("Completed loading fonts in ${duration.inWholeMilliseconds} ms.")
-logger.info("Fonts: [ ${FontManager.fontFaces.keys.joinToString()} ]")
+                // Initialize deep learning engine as task, because we cannot know if DJL will request
+                // resources from the internet.
+                launch("Deep Learning") { task ->
+                    runCatching {
+                        DeepLearningEngine.init(task)
+                        ModelManager.load()
+                        DeepLearningEngine.markInitialized()
+                    }.onFailure { exception ->
+                        task.subTasks.clear()
+                        DeepLearningEngine.markUnavailable()
 
-// 强制使用原版主菜单（如果 ScreenManager 设置了 Web 菜单，会被覆盖）
-mc.gui.setScreen(null)
+                        // LiquidBounce can still run without deep learning,
+                        // and we don't want to crash the client if it fails.
+                        logger.info("Failed to initialize deep learning.", exception)
+                    }
+                }
+
+                launch("Marketplace") { task ->
+                    runCatching {
+                        MarketplaceManager.updateAll(task)
+                    }.onFailure { exception ->
+                        logger.error("Failed to update marketplace items.", exception)
+                    }
+
+                    task.isCompleted = true
+                }
+            }
+        } else {
+            // Android 下不创建任务管理器，避免加载进度屏幕
+            taskManager = null
+        }
+
+        // Prepare glyph manager
+        val duration = measureTime {
+            FontManager.createGlyphManager()
+        }
+        logger.info("Completed loading fonts in ${duration.inWholeMilliseconds} ms.")
+        logger.info("Fonts: [ ${FontManager.fontFaces.keys.joinToString()} ]")
+
+        // Android 下强制显示原版主菜单
+        if (ANDROID_BUILD) {
+            mc.gui.setScreen(null)
+        }
     }
 
     /**
@@ -418,16 +461,17 @@ mc.gui.setScreen(null)
         FontManager.closeGlyphManager()
         EventManager.unregisterAll()
 
-        // Shutdown HTTP server
-        ioScope.launch {
-            ClientInteropServer.stop()
+        if (!ANDROID_BUILD) {
+            // Shutdown HTTP server
+            ioScope.launch {
+                ClientInteropServer.stop()
+            }
+            // Shutdown browser
+            BrowserBackendManager.stop()
         }
 
         // Save all configurations
         ConfigSystem.storeAll()
-
-        // Shutdown browser
-        BrowserBackendManager.stop()
     }
 
     /**
@@ -452,7 +496,9 @@ mc.gui.setScreen(null)
             val resourceManager = mc.resourceManager
             if (resourceManager is ReloadableResourceManager) {
                 resourceManager.registerReloadListener(ClientResourceReloader)
-                resourceManager.registerReloadListener(ThemeManager.reloader)
+                if (!ANDROID_BUILD) {
+                    resourceManager.registerReloadListener(ThemeManager.reloader)
+                }
             } else {
                 logger.warn("Failed to register resource reloader!")
 
@@ -461,7 +507,9 @@ mc.gui.setScreen(null)
                     workerDispatcher = Dispatchers.Default,
                     renderThreadDispatcher = Dispatchers.Minecraft,
                 ).thenRun {
-                    ThemeManager.reloader.onResourceManagerReload(resourceManager)
+                    if (!ANDROID_BUILD) {
+                        ThemeManager.reloader.onResourceManagerReload(resourceManager)
+                    }
                 }
             }
         }.onFailure {
@@ -471,6 +519,7 @@ mc.gui.setScreen(null)
 
     @Suppress("unused")
     private val screenHandler = handler<ScreenEvent>(priority = FIRST_PRIORITY) { event ->
+        if (ANDROID_BUILD) return@handler
         val taskManager = taskManager ?: return@handler
 
         if (!taskManager.isCompleted && event.screen !is TaskProgressScreen) {
