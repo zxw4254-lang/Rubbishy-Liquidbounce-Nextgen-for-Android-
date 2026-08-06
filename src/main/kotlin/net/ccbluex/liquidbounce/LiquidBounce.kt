@@ -375,58 +375,32 @@ object LiquidBounce : EventListener {
     ) = withContext(dispatcher) {
         RenderSystem.assertOnRenderThread()
 
-        BrowserBackendManager.init()
-        ClientInteropServer.start()
-        if (!ClientInteropServer.isSkipping) {
-            ThemeManager.init()
-            // Preload marketplace items
-            ConfigSystem.load(MarketplaceManager)
-            ConfigSystem.load(ThemeManager)
-            ThemeManager.load()
-        }
+        // Android 专用：完全禁用 JCEF、主题、交互服务器、深度学习、市场更新
+logger.info("Android build: skipping all JCEF/web components.")
 
-        BlurEffectRenderer
-        ScreenManager
+// 仅保留必需的渲染组件
+BlurEffectRenderer
+ScreenManager
 
-        taskManager = TaskManager(ioScope).apply {
-            // Either immediately starts browser or spawns a task to request browser dependencies,
-            // and then starts the browser through render thread.
-            BrowserBackendManager.makeDependenciesAvailable(this)
+// 任务管理器：只创建一个占位任务，避免屏幕管理器卡住
+taskManager = TaskManager(ioScope).apply {
+    launch("AndroidPlaceholder") { 
+        // 什么都不做，直接标记完成
+        isCompleted = true
+    }
+    // 不调用 BrowserBackendManager.makeDependenciesAvailable
+    // 不启动 DeepLearning 和 Marketplace 任务
+}
 
-            // Initialize deep learning engine as task, because we cannot know if DJL will request
-            // resources from the internet.
-            launch("Deep Learning") { task ->
-                runCatching {
-                    DeepLearningEngine.init(task)
-                    ModelManager.load()
-                    DeepLearningEngine.markInitialized()
-                }.onFailure { exception ->
-                    task.subTasks.clear()
-                    DeepLearningEngine.markUnavailable()
+// 字体管理器仍然需要（不依赖 JCEF）
+val duration = measureTime {
+    FontManager.createGlyphManager()
+}
+logger.info("Completed loading fonts in ${duration.inWholeMilliseconds} ms.")
+logger.info("Fonts: [ ${FontManager.fontFaces.keys.joinToString()} ]")
 
-                    // LiquidBounce can still run without deep learning,
-                    // and we don't want to crash the client if it fails.
-                    logger.info("Failed to initialize deep learning.", exception)
-                }
-            }
-
-            launch("Marketplace") { task ->
-                runCatching {
-                    MarketplaceManager.updateAll(task)
-                }.onFailure { exception ->
-                    logger.error("Failed to update marketplace items.", exception)
-                }
-
-                task.isCompleted = true
-            }
-        }
-
-        // Prepare glyph manager
-        val duration = measureTime {
-            FontManager.createGlyphManager()
-        }
-        logger.info("Completed loading fonts in ${duration.inWholeMilliseconds} ms.")
-        logger.info("Fonts: [ ${FontManager.fontFaces.keys.joinToString()} ]")
+// 强制使用原版主菜单（如果 ScreenManager 设置了 Web 菜单，会被覆盖）
+mc.gui.setScreen(null)
     }
 
     /**
