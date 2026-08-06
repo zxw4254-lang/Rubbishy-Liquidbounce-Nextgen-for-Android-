@@ -75,7 +75,6 @@ import net.ccbluex.liquidbounce.utils.aiming.PostRotationExecutor
 import net.ccbluex.liquidbounce.utils.aiming.RotationManager
 import net.ccbluex.liquidbounce.utils.block.ChunkScanner
 import net.ccbluex.liquidbounce.utils.client.GitInfo
-import net.ccbluex.liquidbounce.utils.client.PlatformUtils
 import net.ccbluex.liquidbounce.utils.client.InteractionTracker
 import net.ccbluex.liquidbounce.utils.client.ServerObserver
 import net.ccbluex.liquidbounce.utils.client.clientIdentifier
@@ -396,15 +395,13 @@ object LiquidBounce : EventListener {
 
             // Initialize deep learning engine as task, because we cannot know if DJL will request
             // resources from the internet.
-            // Skip on Android platforms as PyTorch native libraries are not available.
-            if (PlatformUtils.SUPPORTS_DEEP_LEARNING) {
             launch("Deep Learning") { task ->
                 runCatching {
                     DeepLearningEngine.init(task)
-                         ModelManager.load()
+                    ModelManager.load()
+                    DeepLearningEngine.markInitialized()
                 }.onFailure { exception ->
-                task.subTasks.clear()
-                }
+                    task.subTasks.clear()
                     DeepLearningEngine.markUnavailable()
 
                     // LiquidBounce can still run without deep learning,
@@ -412,8 +409,6 @@ object LiquidBounce : EventListener {
                     logger.info("Failed to initialize deep learning.", exception)
                 }
             }
-        } else {
-                 logger.info("Deep Learning is not supported on this platform. Sk<br>ipping.")
 
             launch("Marketplace") { task ->
                 runCatching {
@@ -473,11 +468,6 @@ object LiquidBounce : EventListener {
             logger.info("Client Branch: $clientBranch")
             logger.info("Operating System: ${System.getProperty("os.name")} (${System.getProperty("os.version")})")
             logger.info("Java Version: ${System.getProperty("java.version")}")
-            logger.info("Platform: ${PlatformUtils.getPlatformDisplayName()}")
-            if (PlatformUtils.IS_ANDROID) {
-            logger.info("Android detected! Running on ${PlatformUtils.LAUNCH<br>ER_NAME}")
-            logger.info("Some features (JCEF, Discord IPC, Deep Learning) wi<br>ll be disabled.")
-            }
             logger.info("Screen Resolution: ${mc.window.screenWidth}x${mc.window.screenHeight}")
             logger.info("Refresh Rate: ${mc.window.refreshRate} Hz")
 
