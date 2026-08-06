@@ -28,11 +28,11 @@ import net.ccbluex.liquidbounce.integration.screen.impl.CustomStandaloneMinecraf
 import net.ccbluex.liquidbounce.utils.client.inGame
 import net.ccbluex.liquidbounce.utils.kotlin.EventPriorityConvention.OBJECTION_AGAINST_EVERYTHING
 import net.ccbluex.liquidbounce.utils.kotlin.EventPriorityConvention.READ_FINAL_STATE
+import net.ccbluex.liquidbounce.utils.render.Color4b
 import org.lwjgl.glfw.GLFW
-import java.awt.Color
 
 /**
- * Vape UI 风格的 ClickGUI 模块 - Android 适配（移除 Color4b，改用 Color）
+ * Vape UI 风格的 ClickGUI 模块 - Android 适配（使用 Color4b）
  */
 object ModuleClickGui :
     ClientModule("ClickGUI", ModuleCategories.RENDER, bind = GLFW.GLFW_KEY_RIGHT_SHIFT, disableActivation = false) {
@@ -52,14 +52,14 @@ object ModuleClickGui :
         EventManager.callEvent(ClickGuiValueChangeEvent(this))
     }
 
-    // 使用 java.awt.Color 替代 Color4b
+    // 使用 Color4b（项目自定义颜色类）
     @Suppress("UnusedPrivateProperty")
-    private val accentColor by color("AccentColor", Color(0x00, 0xFF, 0x9D)).onChanged {
+    private val accentColor by color("AccentColor", Color4b(0x00, 0xFF, 0x9D, 0xFF)).onChanged {
         EventManager.callEvent(ClickGuiValueChangeEvent(this))
     }
 
     @Suppress("UnusedPrivateProperty")
-    private val backgroundColor by color("BackgroundColor", Color(0x0A, 0x0A, 0x0A)).onChanged {
+    private val backgroundColor by color("BackgroundColor", Color4b(0x0A, 0x0A, 0x0A, 0xE8)).onChanged {
         EventManager.callEvent(ClickGuiValueChangeEvent(this))
     }
 
