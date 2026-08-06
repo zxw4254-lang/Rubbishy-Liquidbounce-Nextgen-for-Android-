@@ -228,18 +228,24 @@ class Theme private constructor(val origin: Origin, url: String) :
     )
 
     private suspend fun loadFonts() {
-        for (font in metadata.fonts) {
-            runCatching {
-                get<InputStream>("/fonts/$font").use { stream ->
-                    FontManager.queueFontFromStream(stream)
-                }
-
-                logger.info("Loaded font $font for theme ${metadata.name}")
-            }.onFailure {
-                logger.warn("Failed to load font $font for theme ${metadata.name}", it)
+    // Android 下跳过自定义字体，避免 AWT 调用
+    if (System.getProperty("java.vendor")?.contains("Android") == true ||
+        (System.getProperty("os.name")?.equals("Linux", ignoreCase = true) == true &&
+         System.getProperty("java.version")?.startsWith("0") == true)) {
+        logger.info("Skipping custom font loading on Android platform.")
+        return
+    }
+    for (font in metadata.fonts) {
+        runCatching {
+            get<InputStream>("/fonts/$font").use { stream ->
+                FontManager.queueFontFromStream(stream)
             }
+            logger.info("Loaded font $font for theme ${metadata.name}")
+        }.onFailure {
+            logger.warn("Failed to load font $font for theme ${metadata.name}", it)
         }
     }
+}
 
     private suspend fun loadAll() = apply {
         loadMetadata()
