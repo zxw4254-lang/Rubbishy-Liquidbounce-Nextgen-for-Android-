@@ -30,11 +30,18 @@ import net.ccbluex.liquidbounce.integration.backend.browser.GlobalBrowserSetting
 import net.ccbluex.liquidbounce.integration.interop.persistant.PersistentLocalStorage
 import net.ccbluex.liquidbounce.integration.task.TaskManager
 import net.ccbluex.liquidbounce.utils.client.clientLogger
+import net.ccbluex.liquidbounce.utils.client.PlatformUtils
 import net.ccbluex.liquidbounce.utils.client.env
 import net.ccbluex.liquidbounce.utils.client.mc
 import net.ccbluex.liquidbounce.utils.kotlin.EventPriorityConvention.FIRST_PRIORITY
 
-val browserBackend = env("LB_BROWSER_BACKEND", "net.ccbluex.liquidbounce.browser.backend") ?: "cef"
+// On Android/PojavLauncher, JCEF/MCEF is not supported due to missing native libraries.
+// Auto-skip browser initialization on these platforms.
+val browserBackend = if (!PlatformUtils.SUPPORTS_JCEF || PlatformUtils.IS_ANDROID || PlatformUtils.IS_POJAV) {
+    "none"
+} else {
+    env("LB_BROWSER_BACKEND", "net.ccbluex.liquidbounce.browser.backend") ?: "cef"
+}
 var isBrowserDisabled = env("LB_BROWSER_SKIP", "net.ccbluex.liquidbounce.browser.skip")?.toBoolean()
     ?: false
 val isBrowserAccelerationDisabled = env("LB_BROWSER_DISABLE_ACCELERATION",
