@@ -88,10 +88,14 @@ allprojects {
 
 loom {
     accessWidenerPath = file("src/main/resources/liquidbounce.accesswidener")
-    
-    // [Kotlin DSL 标准写法] 显示指定调用 Loom 扩展的 mappings 方法
-    loom.mappings(loom.officialMojangMappings())
 }
+
+// ==========================================================
+// 【终极解决办法】：强制在全局作用域获取 Loom 扩展并应用映射。
+// 这样写将 100% 绕过 Kotlin DSL 中 loom 内部解析不到 mappings 的 Bug。
+// ==========================================================
+the<net.fabricmc.loom.api.LoomExtension>().mappings = the<net.fabricmc.loom.api.LoomExtension>().officialMojangMappings()
+// ==========================================================
 
 dependencies {
     // Minecraft
