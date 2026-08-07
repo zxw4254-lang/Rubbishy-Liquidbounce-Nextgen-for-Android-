@@ -96,6 +96,11 @@ import java.util.concurrent.Executor
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.measureTime
 
+// ================= 【新增导入】 =================
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents
+import net.ccbluex.liquidbounce.event.events.GameTickEvent
+// ================================================
+
 /**
  * LiquidBounce
  *
@@ -491,6 +496,22 @@ object LiquidBounce : EventListener {
 
             // Initialize event manager
             EventManager
+
+            // ================= 【新增代码】 =================
+            // 修复 Android 环境下 Mixin 失效导致模块功能挂掉的问题。
+            // 由于无法拦截原版 Tick，这里手动用 Fabric 的 END_CLIENT_TICK 作为驱动引擎。
+            ClientTickEvents.END_CLIENT_TICK.register {
+                try {
+                    if (mc.player != null && mc.world != null) {
+                        // 主动触发 GameTickEvent，推动 Fly/KillAura/Speed 等所有依赖 Tick 的模块跑起来
+                        EventManager.callEvent(GameTickEvent())
+                    }
+                } catch (e: Exception) {
+                    // 捕获可能出现的罕见异常，防止拖动导致游戏直接卡死或崩溃
+                    e.printStackTrace()
+                }
+            }
+            // ===============================================
 
             // Register resource reloader
             val resourceManager = mc.resourceManager
