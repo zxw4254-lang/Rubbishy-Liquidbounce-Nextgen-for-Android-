@@ -96,10 +96,10 @@ import java.util.concurrent.Executor
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.measureTime
 
-// ================= 【驱动引擎导入】 =================
+// ================= 【驱动引擎导入（已替换为 0.36.1 兼容版本）】 =================
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents
-import net.ccbluex.liquidbounce.event.events.GameTickEvent
-// ====================================================
+import net.ccbluex.liquidbounce.event.events.ClientTickEvent
+// =================================================================================
 
 /**
  * LiquidBounce
@@ -487,7 +487,8 @@ object LiquidBounce : EventListener {
             ClientTickEvents.END_CLIENT_TICK.register { client ->
                 try {
                     if (client.player != null && client.level != null) {
-                        EventManager.callEvent<GameTickEvent>(GameTickEvent())
+                        // 【重要修复】：0.36.1 版本下，标准驱动事件是 ClientTickEvent
+                        EventManager.callEvent<ClientTickEvent>(ClientTickEvent())
                     }
                 } catch (e: Exception) {
                     e.printStackTrace()
