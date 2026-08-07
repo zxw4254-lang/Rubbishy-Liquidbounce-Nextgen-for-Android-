@@ -10,7 +10,7 @@ import net.minecraft.client.gui.Font
 import net.minecraft.client.input.MouseButtonEvent
 import net.minecraft.client.input.KeyEvent
 import net.minecraft.client.input.CharacterEvent
-import net.minecraft.util.math.MatrixStack
+import net.minecraft.client.util.math.MatrixStack
 import net.minecraft.network.chat.Component
 import org.lwjgl.glfw.GLFW
 import java.awt.Color
@@ -66,7 +66,7 @@ class ClickGuiScreen : Screen(Component.literal("Vape ClickGUI")) {
     override fun isPauseScreen() = false
     override fun shouldCloseOnEsc() = true
 
-    // ==================== 绘制工具 ====================
+    // ==================== 绘制工具（使用 Tessellator） ====================
 
     private fun fillRect(matrices: MatrixStack, x1: Int, y1: Int, x2: Int, y2: Int, color: Int) {
         if (x2 <= x1 || y2 <= y1) return
@@ -273,7 +273,7 @@ class ClickGuiScreen : Screen(Component.literal("Vape ClickGUI")) {
         }
     }
 
-    override fun renderBackground(matrices: MatrixStack, mouseX: Int, mouseY: Int, delta: Float) {
+    override fun renderBackground(matrices: MatrixStack) {
         // 空实现
     }
 
@@ -417,12 +417,12 @@ class ClickGuiScreen : Screen(Component.literal("Vape ClickGUI")) {
         }
     }
 
-    // ==================== 事件处理 ====================
+    // ==================== 事件处理（匹配当前映射） ====================
 
-    override fun mouseClicked(mouseX: Double, mouseY: Double, button: Int): Boolean {
-        val btn = button
-        val mx = mouseX.toInt()
-        val my = mouseY.toInt()
+    override fun mouseClicked(event: MouseButtonEvent, doubleClick: Boolean): Boolean {
+        val btn = event.button()
+        val mx = event.x().toInt()
+        val my = event.y().toInt()
         val sc = minecraft!!.window.guiScaledWidth
         val sh = minecraft!!.window.guiScaledHeight
         val winX = (sc - WIN_W) / 2f
@@ -486,7 +486,7 @@ class ClickGuiScreen : Screen(Component.literal("Vape ClickGUI")) {
             handleDetailClick(expandedModule!!, mx.toFloat(), my.toFloat(), btn)
         }
 
-        return super.mouseClicked(mouseX, mouseY, button)
+        return super.mouseClicked(event, doubleClick)
     }
 
     private fun handleDetailClick(mod: ClientModule, mx: Float, my: Float, btn: Int) {
@@ -505,19 +505,19 @@ class ClickGuiScreen : Screen(Component.literal("Vape ClickGUI")) {
         return true
     }
 
-    override fun keyPressed(keyCode: Int, scanCode: Int, modifiers: Int): Boolean {
+    override fun keyPressed(event: KeyEvent): Boolean {
         if (listeningValue != null) {
             listeningValue = null
             return true
         }
 
-        if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
+        if (event.key() == GLFW.GLFW_KEY_ESCAPE) {
             onClose()
             return true
         }
 
         if (searchFocused) {
-            when (keyCode) {
+            when (event.key()) {
                 GLFW.GLFW_KEY_BACKSPACE -> {
                     if (searchText.isNotEmpty()) searchText = searchText.dropLast(1)
                     return true
@@ -527,7 +527,7 @@ class ClickGuiScreen : Screen(Component.literal("Vape ClickGUI")) {
                     return true
                 }
                 else -> {
-                    val name = GLFW.glfwGetKeyName(keyCode, 0)
+                    val name = GLFW.glfwGetKeyName(event.key(), 0)
                     if (name != null && name.length == 1) {
                         searchText += name
                         return true
@@ -535,20 +535,31 @@ class ClickGuiScreen : Screen(Component.literal("Vape ClickGUI")) {
                 }
             }
         }
-        return super.keyPressed(keyCode, scanCode, modifiers)
+        return super.keyPressed(event)
     }
 
-    override fun charTyped(character: Char, modifiers: Int): Boolean {
-        if (searchFocused && character.code > 31) {
-            searchText += character
+    override fun charTyped(event: CharacterEvent): Boolean {
+        if (searchFocused && event.codePoint() > 31) {
+            searchText += event.codePoint().toChar()
             return true
         }
-        return super.charTyped(character, modifiers)
+        return super.charTyped(event)
     }
 
     override fun onClose() {
-        minecraft?.setScreen(null)
+        setScreenCompat(null)
         fadeAnim = 0f
+    }
+
+    // ==================== setScreen 兼容垫片 ====================
+    private fun setScreenCompat(screen: Screen?) {
+        try {
+            minecraft?.javaClass?.getMethod("setScreen", Screen::class.java)?.invoke(minecraft, screen)
+        } catch (_: NoSuchMethodException) {
+            try {
+                minecraft?.javaClass?.getMethod("displayGuiScreen", Screen::class.java)?.invoke(minecraft, screen)
+            } catch (_: Exception) { /* ignore */ }
+        } catch (_: Exception) { /* ignore */ }
     }
 
     // ==================== 辅助方法 ====================

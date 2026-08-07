@@ -29,6 +29,8 @@ import net.ccbluex.liquidbounce.utils.client.inGame
 import net.ccbluex.liquidbounce.utils.kotlin.EventPriorityConvention.OBJECTION_AGAINST_EVERYTHING
 import net.ccbluex.liquidbounce.utils.kotlin.EventPriorityConvention.READ_FINAL_STATE
 import net.ccbluex.liquidbounce.render.engine.type.Color4b
+import net.minecraft.client.MinecraftClient
+import net.minecraft.client.gui.screens.Screen
 import org.lwjgl.glfw.GLFW
 
 /**
@@ -187,13 +189,13 @@ object ModuleClickGui :
 
     private val keyHandler = handler<KeyboardKeyEvent> { event ->
         if (event.action == 1 && (event.keyCode == GLFW.GLFW_KEY_RIGHT_SHIFT || event.keyCode == 54) && mc.screen == null) {
-            mc.setScreen(ClickGuiScreen())
+            setScreenCompat(ClickGuiScreen())
         }
     }
 
     override fun onEnabled() {
         if (!LiquidBounce.isInitialized) return
-        mc.setScreen(ClickGuiScreen())
+        setScreenCompat(ClickGuiScreen())
         super.onEnabled()
     }
 
@@ -241,12 +243,23 @@ object ModuleClickGui :
     fun invalidate() {
         val standaloneScreen = standaloneScreen ?: return
         val wasOpen = mc.screen == standaloneScreen
-        if (wasOpen) mc.setScreen(null)
+        if (wasOpen) setScreenCompat(null)
         standaloneScreen.close()
         this.standaloneScreen = null
         if (wasOpen) {
             updateStandaloneScreen()
-            mc.setScreen(this.standaloneScreen ?: ClickGuiScreen())
+            setScreenCompat(this.standaloneScreen ?: ClickGuiScreen())
         }
+    }
+
+    // ==================== setScreen 兼容垫片 ====================
+    private fun setScreenCompat(screen: Screen?) {
+        try {
+            MinecraftClient.getInstance().javaClass.getMethod("setScreen", Screen::class.java)?.invoke(MinecraftClient.getInstance(), screen)
+        } catch (_: NoSuchMethodException) {
+            try {
+                MinecraftClient.getInstance().javaClass.getMethod("displayGuiScreen", Screen::class.java)?.invoke(MinecraftClient.getInstance(), screen)
+            } catch (_: Exception) { /* ignore */ }
+        } catch (_: Exception) { /* ignore */ }
     }
 }
