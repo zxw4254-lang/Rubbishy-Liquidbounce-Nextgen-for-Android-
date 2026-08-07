@@ -7,7 +7,7 @@ import net.ccbluex.liquidbounce.features.module.ModuleCategories
 import net.ccbluex.liquidbounce.features.module.ModuleManager
 import net.minecraft.client.gui.screens.Screen
 import net.minecraft.client.gui.Font
-import net.minecraft.client.gui.GuiGraphics
+import net.minecraft.client.gui.DrawContext
 import net.minecraft.client.input.MouseButtonEvent
 import net.minecraft.client.input.KeyEvent
 import net.minecraft.client.input.CharacterEvent
@@ -68,31 +68,39 @@ class ClickGuiScreen : Screen(Component.literal("Vape ClickGUI")) {
 
     // ==================== 绘制工具 ====================
 
-    private fun fillRect(graphics: GuiGraphics, x1: Int, y1: Int, x2: Int, y2: Int, color: Int) {
+    private fun fillRect(ctx: DrawContext, x1: Int, y1: Int, x2: Int, y2: Int, color: Int) {
         if (x2 <= x1 || y2 <= y1) return
-        graphics.fill(x1, y1, x2, y2, color)
+        ctx.fill(x1, y1, x2, y2, color)
     }
 
-    private fun fillRect(graphics: GuiGraphics, x1: Float, y1: Float, x2: Float, y2: Float, color: Int) {
+    private fun fillRect(ctx: DrawContext, x1: Float, y1: Float, x2: Float, y2: Float, color: Int) {
         if (x2 <= x1 || y2 <= y1) return
-        graphics.fill(x1.toInt(), y1.toInt(), x2.toInt(), y2.toInt(), color)
+        ctx.fill(x1.toInt(), y1.toInt(), x2.toInt(), y2.toInt(), color)
     }
 
-    private fun drawRoundedRect(graphics: GuiGraphics, x: Float, y: Float, w: Float, h: Float, radius: Float, color: Int) {
+    private fun drawText(ctx: DrawContext, font: Font, text: String, x: Int, y: Int, color: Int) {
+        ctx.drawText(font, Component.literal(text), x, y, color, false)
+    }
+
+    private fun drawText(ctx: DrawContext, font: Font, text: Component, x: Int, y: Int, color: Int) {
+        ctx.drawText(font, text, x, y, color, false)
+    }
+
+    private fun drawRoundedRect(ctx: DrawContext, x: Float, y: Float, w: Float, h: Float, radius: Float, color: Int) {
         val r = radius.coerceAtMost(w / 2f).coerceAtMost(h / 2f)
         val x1 = x; val y1 = y; val x2 = x + w; val y2 = y + h
 
-        fillRect(graphics, (x1 + r), y1, (x2 - r), y2, color)
-        fillRect(graphics, x1, (y1 + r), (x1 + r), (y2 - r), color)
-        fillRect(graphics, (x2 - r), (y1 + r), x2, (y2 - r), color)
+        fillRect(ctx, (x1 + r), y1, (x2 - r), y2, color)
+        fillRect(ctx, x1, (y1 + r), (x1 + r), (y2 - r), color)
+        fillRect(ctx, (x2 - r), (y1 + r), x2, (y2 - r), color)
 
-        drawCorner(graphics, x1 + r, y1 + r, r, 180f, 270f, color)
-        drawCorner(graphics, x2 - r, y1 + r, r, 270f, 360f, color)
-        drawCorner(graphics, x2 - r, y2 - r, r, 0f, 90f, color)
-        drawCorner(graphics, x1 + r, y2 - r, r, 90f, 180f, color)
+        drawCorner(ctx, x1 + r, y1 + r, r, 180f, 270f, color)
+        drawCorner(ctx, x2 - r, y1 + r, r, 270f, 360f, color)
+        drawCorner(ctx, x2 - r, y2 - r, r, 0f, 90f, color)
+        drawCorner(ctx, x1 + r, y2 - r, r, 90f, 180f, color)
     }
 
-    private fun drawCorner(graphics: GuiGraphics, cx: Float, cy: Float, r: Float, start: Float, end: Float, color: Int) {
+    private fun drawCorner(ctx: DrawContext, cx: Float, cy: Float, r: Float, start: Float, end: Float, color: Int) {
         var a = start
         while (a < end) {
             val rad1 = Math.toRadians(a.toDouble())
@@ -105,16 +113,16 @@ class ClickGuiScreen : Screen(Component.literal("Vape ClickGUI")) {
             val maxX = cx.coerceAtLeast(px1).coerceAtLeast(px2).toInt()
             val minY = cy.coerceAtMost(py1).coerceAtMost(py2).toInt()
             val maxY = cy.coerceAtLeast(py1).coerceAtLeast(py2).toInt()
-            fillRect(graphics, minX, minY, max(minX + 1, maxX), max(minY + 1, maxY), color)
+            fillRect(ctx, minX, minY, max(minX + 1, maxX), max(minY + 1, maxY), color)
             a += 8f
         }
     }
 
-    private fun drawVapeShadow(graphics: GuiGraphics, x: Float, y: Float, w: Float, h: Float) {
+    private fun drawVapeShadow(ctx: DrawContext, x: Float, y: Float, w: Float, h: Float) {
         for (i in 0..8) {
             val offset = i.toFloat()
             val alpha = (15 * (1f - i / 8f)).toInt()
-            drawRoundedRect(graphics, x - offset, y - offset, w + offset * 2, h + offset * 2, CORNER + offset, (alpha shl 24) or 0x000000)
+            drawRoundedRect(ctx, x - offset, y - offset, w + offset * 2, h + offset * 2, CORNER + offset, (alpha shl 24) or 0x000000)
         }
     }
 
@@ -136,7 +144,7 @@ class ClickGuiScreen : Screen(Component.literal("Vape ClickGUI")) {
 
     // ==================== 核心渲染 ====================
 
-    override fun render(graphics: GuiGraphics, mouseX: Int, mouseY: Int, delta: Float) {
+    override fun render(ctx: DrawContext, mouseX: Int, mouseY: Int, delta: Float) {
         fadeAnim += (1f - fadeAnim) * 0.2f
         val alpha = fadeAnim.coerceIn(0f, 1f)
         if (alpha < 0.01f) return
@@ -148,31 +156,31 @@ class ClickGuiScreen : Screen(Component.literal("Vape ClickGUI")) {
         val font = minecraft!!.font
 
         // 窗口阴影
-        drawVapeShadow(graphics, winX, winY, WIN_W.toFloat(), WIN_H.toFloat())
+        drawVapeShadow(ctx, winX, winY, WIN_W.toFloat(), WIN_H.toFloat())
         // 窗口背景
-        drawRoundedRect(graphics, winX, winY, WIN_W.toFloat(), WIN_H.toFloat(), CORNER, BG)
+        drawRoundedRect(ctx, winX, winY, WIN_W.toFloat(), WIN_H.toFloat(), CORNER, BG)
 
         // ===== 标题栏 =====
-        drawRoundedRect(graphics, winX, winY, WIN_W.toFloat(), HEADER_H.toFloat(), CORNER, HEADER)
-        graphics.drawString(font, Component.literal("§lVape §f§lV5"), (winX + 12f).toInt(), (winY + 6f).toInt(), ACCENT)
-        graphics.drawString(font, Component.literal("§7v5.0"), (winX + WIN_W - 50f).toInt(), (winY + 7f).toInt(), TEXT_DIM)
+        drawRoundedRect(ctx, winX, winY, WIN_W.toFloat(), HEADER_H.toFloat(), CORNER, HEADER)
+        drawText(ctx, font, "§lVape §f§lV5", (winX + 12f).toInt(), (winY + 6f).toInt(), ACCENT)
+        drawText(ctx, font, "§7v5.0", (winX + WIN_W - 50f).toInt(), (winY + 7f).toInt(), TEXT_DIM)
 
         // ===== 搜索栏 =====
         val searchY = winY + HEADER_H + 4
         val searchX = winX + 8
         val searchW = WIN_W - 16
 
-        drawRoundedRect(graphics, searchX, searchY, searchW.toFloat(), SEARCH_H.toFloat(), 6f, 0x28FFFFFF.toInt())
-        graphics.drawString(font, Component.literal("🔍"), (searchX + 6f).toInt(), (searchY + 6f).toInt(), TEXT_DIM)
+        drawRoundedRect(ctx, searchX, searchY, searchW.toFloat(), SEARCH_H.toFloat(), 6f, 0x28FFFFFF.toInt())
+        drawText(ctx, font, "🔍", (searchX + 6f).toInt(), (searchY + 6f).toInt(), TEXT_DIM)
 
         val displayText = if (searchText.isEmpty()) "§7搜索功能..." else "§f$searchText"
-        graphics.drawString(font, Component.literal(trimText(font, displayText, searchW - 30)), (searchX + 22f).toInt(), (searchY + 6f).toInt(), TEXT)
+        drawText(ctx, font, trimText(font, displayText, searchW - 30), (searchX + 22f).toInt(), (searchY + 6f).toInt(), TEXT)
 
         if (searchFocused) {
             val cursorX = searchX.toInt() + 22 + font.width(searchText)
             if (cursorX < searchX + searchW - 4) {
                 val blink = System.currentTimeMillis() / 500 % 2 == 0L
-                if (blink) fillRect(graphics, cursorX, searchY.toInt() + 4, cursorX + 1, searchY.toInt() + SEARCH_H.toInt() - 4, TEXT_BRIGHT)
+                if (blink) fillRect(ctx, cursorX, searchY.toInt() + 4, cursorX + 1, searchY.toInt() + SEARCH_H.toInt() - 4, TEXT_BRIGHT)
             }
         }
 
@@ -180,27 +188,27 @@ class ClickGuiScreen : Screen(Component.literal("Vape ClickGUI")) {
         val tabY = searchY + SEARCH_H + 2
         val tabW = (WIN_W - 16) / categories.size
 
-        fillRect(graphics, winX.toInt() + 4, tabY.toInt(), winX.toInt() + WIN_W - 4, tabY.toInt() + TAB_H.toInt(), 0x18000000.toInt())
+        fillRect(ctx, winX.toInt() + 4, tabY.toInt(), winX.toInt() + WIN_W - 4, tabY.toInt() + TAB_H.toInt(), 0x18000000.toInt())
 
         categories.forEachIndexed { i, cat ->
             val tx = winX + 8 + i * tabW
             val isActive = i == currentCategory
 
             if (isActive) {
-                fillRect(graphics, tx.toInt(), tabY.toInt(), (tx + tabW - 2).toInt(), (tabY + TAB_H).toInt(), ACCENT)
-                fillRect(graphics, tx.toInt(), (tabY + TAB_H - 2).toInt(), (tx + tabW - 2).toInt(), (tabY + TAB_H).toInt(), ACCENT_DARK)
+                fillRect(ctx, tx.toInt(), tabY.toInt(), (tx + tabW - 2).toInt(), (tabY + TAB_H).toInt(), ACCENT)
+                fillRect(ctx, tx.toInt(), (tabY + TAB_H - 2).toInt(), (tx + tabW - 2).toInt(), (tabY + TAB_H).toInt(), ACCENT_DARK)
             } else if (mouseX in tx.toInt()..(tx + tabW - 2).toInt() && mouseY in tabY.toInt()..(tabY + TAB_H).toInt()) {
-                fillRect(graphics, tx.toInt(), tabY.toInt(), (tx + tabW - 2).toInt(), (tabY + TAB_H).toInt(), HOVER)
+                fillRect(ctx, tx.toInt(), tabY.toInt(), (tx + tabW - 2).toInt(), (tabY + TAB_H).toInt(), HOVER)
             }
 
             val label = trimText(font, cat.tag.uppercase(), tabW - 4)
             val cw = font.width(label)
-            graphics.drawString(font, Component.literal(label), (tx + ((tabW - 2) - cw) / 2f).toInt(), (tabY + 4f).toInt(), if (isActive) TEXT_BRIGHT else TEXT_DIM)
+            drawText(ctx, font, label, (tx + ((tabW - 2) - cw) / 2f).toInt(), (tabY + 4f).toInt(), if (isActive) TEXT_BRIGHT else TEXT_DIM)
         }
 
         // ===== 分割线 =====
         val divY = tabY + TAB_H + 1
-        fillRect(graphics, winX.toInt() + 8, divY.toInt(), winX.toInt() + WIN_W - 8, divY.toInt() + 1, BORDER)
+        fillRect(ctx, winX.toInt() + 8, divY.toInt(), winX.toInt() + WIN_W - 8, divY.toInt() + 1, BORDER)
 
         // ===== 主体 =====
         val bodyY = divY + 4
@@ -222,14 +230,14 @@ class ClickGuiScreen : Screen(Component.literal("Vape ClickGUI")) {
                           mouseY in yPos.toInt()..(yPos + ITEM_H).toInt()
             val isExpanded = expandedModule == mod
 
-            if (isHover) fillRect(graphics, winX.toInt() + 6, yPos.toInt(), listRight.toInt(), (yPos + ITEM_H).toInt(), HOVER)
+            if (isHover) fillRect(ctx, winX.toInt() + 6, yPos.toInt(), listRight.toInt(), (yPos + ITEM_H).toInt(), HOVER)
             if (isExpanded) {
-                fillRect(graphics, winX.toInt() + 6, yPos.toInt(), listRight.toInt(), (yPos + ITEM_H).toInt(), Color(0x00FF9D, 15).rgb)
+                fillRect(ctx, winX.toInt() + 6, yPos.toInt(), listRight.toInt(), (yPos + ITEM_H).toInt(), Color(0x00FF9D, 15).rgb)
             }
 
             val nameColor = if (mod.enabled) ACCENT else TEXT_DIM
             val nameText = if (isExpanded) "§n${mod.name}" else mod.name
-            graphics.drawString(font, Component.literal(trimText(font, nameText, (listRight - winX - 40).toInt())), (winX + 14f).toInt(), (yPos + 5f).toInt(), nameColor)
+            drawText(ctx, font, trimText(font, nameText, (listRight - winX - 40).toInt()), (winX + 14f).toInt(), (yPos + 5f).toInt(), nameColor)
 
             // Vape 风格开关
             val toggleX = listRight.toInt() - 26
@@ -238,12 +246,12 @@ class ClickGuiScreen : Screen(Component.literal("Vape ClickGUI")) {
             val toggleH = 12
 
             if (mod.enabled) {
-                drawRoundedRect(graphics, toggleX.toFloat(), toggleY.toFloat(), toggleW.toFloat(), toggleH.toFloat(), 6f, ACCENT)
-                fillRect(graphics, toggleX + toggleW - 8, toggleY + 2, toggleX + toggleW - 2, toggleY + toggleH - 2, TEXT_BRIGHT)
-                fillRect(graphics, toggleX + toggleW - 8, toggleY + 2, toggleX + toggleW - 2, toggleY + toggleH - 2, Color(0x00FF9D, 40).rgb)
+                drawRoundedRect(ctx, toggleX.toFloat(), toggleY.toFloat(), toggleW.toFloat(), toggleH.toFloat(), 6f, ACCENT)
+                fillRect(ctx, toggleX + toggleW - 8, toggleY + 2, toggleX + toggleW - 2, toggleY + toggleH - 2, TEXT_BRIGHT)
+                fillRect(ctx, toggleX + toggleW - 8, toggleY + 2, toggleX + toggleW - 2, toggleY + toggleH - 2, Color(0x00FF9D, 40).rgb)
             } else {
-                drawRoundedRect(graphics, toggleX.toFloat(), toggleY.toFloat(), toggleW.toFloat(), toggleH.toFloat(), 6f, 0x30FFFFFF.toInt())
-                fillRect(graphics, toggleX + 2, toggleY + 2, toggleX + 8, toggleY + toggleH - 2, 0xAA808080.toInt())
+                drawRoundedRect(ctx, toggleX.toFloat(), toggleY.toFloat(), toggleW.toFloat(), toggleH.toFloat(), 6f, 0x30FFFFFF.toInt())
+                fillRect(ctx, toggleX + 2, toggleY + 2, toggleX + 8, toggleY + toggleH - 2, 0xAA808080.toInt())
             }
         }
 
@@ -251,12 +259,12 @@ class ClickGuiScreen : Screen(Component.literal("Vape ClickGUI")) {
         val detailX = listRight + 2
         val detailW = (PANEL_W - 4).toFloat()
 
-        drawRoundedRect(graphics, detailX, bodyY, detailW, bodyH.toFloat(), 6f, PANEL)
+        drawRoundedRect(ctx, detailX, bodyY, detailW, bodyH.toFloat(), 6f, PANEL)
 
         if (expandedModule != null) {
-            renderModuleDetail(graphics, expandedModule!!, detailX, bodyY, detailW, bodyH.toFloat(), mouseX, mouseY)
+            renderModuleDetail(ctx, expandedModule!!, detailX, bodyY, detailW, bodyH.toFloat(), mouseX, mouseY)
         } else {
-            graphics.drawString(font, Component.literal("§7选择一个模块配置"), (detailX + 8f).toInt(), (bodyY + 8f).toInt(), TEXT_DIM)
+            drawText(ctx, font, "§7选择一个模块配置", (detailX + 8f).toInt(), (bodyY + 8f).toInt(), TEXT_DIM)
         }
 
         // Flash动画
@@ -266,14 +274,14 @@ class ClickGuiScreen : Screen(Component.literal("Vape ClickGUI")) {
         }
     }
 
-    override fun renderBackground(graphics: GuiGraphics, mouseX: Int, mouseY: Int, delta: Float) {
+    override fun renderBackground(ctx: DrawContext, mouseX: Int, mouseY: Int, delta: Float) {
         // 空实现：不绘制默认背景
     }
 
     // ==================== 详情面板 ====================
 
     private fun renderModuleDetail(
-        graphics: GuiGraphics,
+        ctx: DrawContext,
         mod: ClientModule,
         x: Float,
         y: Float,
@@ -286,12 +294,12 @@ class ClickGuiScreen : Screen(Component.literal("Vape ClickGUI")) {
         val visibleValues = getVisibleValues(mod)
 
         // 标题
-        graphics.drawString(font, Component.literal("§l${mod.name}"), (x + 8f).toInt(), (y + 4f).toInt(), if (mod.enabled) ACCENT else TEXT)
+        drawText(ctx, font, "§l${mod.name}", (x + 8f).toInt(), (y + 4f).toInt(), if (mod.enabled) ACCENT else TEXT)
         val statusText = if (mod.enabled) "§a● 已启用" else "§c● 已禁用"
-        graphics.drawString(font, Component.literal(statusText), (x + 8f).toInt(), (y + 18f).toInt(), TEXT_DIM)
+        drawText(ctx, font, statusText, (x + 8f).toInt(), (y + 18f).toInt(), TEXT_DIM)
 
         // 分割线
-        fillRect(graphics, x.toInt() + 6, y.toInt() + 32, (x + w - 6).toInt(), y.toInt() + 33, BORDER)
+        fillRect(ctx, x.toInt() + 6, y.toInt() + 32, (x + w - 6).toInt(), y.toInt() + 33, BORDER)
 
         // 参数列表
         val listY = y + 36
@@ -316,16 +324,16 @@ class ClickGuiScreen : Screen(Component.literal("Vape ClickGUI")) {
                 val isHover = mouseX in (x.toInt() + 4)..(x + w - 4).toInt() &&
                               mouseY in yPos..(yPos + itemHeight.toInt())
 
-                if (isHover) fillRect(graphics, x.toInt() + 4, yPos, (x + w - 4).toInt(), yPos + itemHeight.toInt(), HOVER)
+                if (isHover) fillRect(ctx, x.toInt() + 4, yPos, (x + w - 4).toInt(), yPos + itemHeight.toInt(), HOVER)
 
                 if (isGroup) {
                     val isCollapsed = collapsedGroups.contains(v)
                     val arrow = if (isCollapsed) "▶" else "▼"
                     val groupName = trimText(font, "$arrow ${v.name}", (w - 20 - indent).toInt())
-                    graphics.drawString(font, Component.literal(groupName), (x + 8 + indent).toInt(), yPos + 2, TEXT)
-                    if (isHover) fillRect(graphics, x.toInt() + 4, yPos, (x + w - 4).toInt(), yPos + 1, ACCENT)
+                    drawText(ctx, font, groupName, (x + 8 + indent).toInt(), yPos + 2, TEXT)
+                    if (isHover) fillRect(ctx, x.toInt() + 4, yPos, (x + w - 4).toInt(), yPos + 1, ACCENT)
                 } else {
-                    renderParamValue(graphics, v, x, yPos, w, indent, mouseX, mouseY)
+                    renderParamValue(ctx, v, x, yPos, w, indent, mouseX, mouseY)
                 }
             }
             curY += itemHeight
@@ -333,7 +341,7 @@ class ClickGuiScreen : Screen(Component.literal("Vape ClickGUI")) {
     }
 
     private fun renderParamValue(
-        graphics: GuiGraphics,
+        ctx: DrawContext,
         v: Value<*>,
         x: Float,
         y: Int,
@@ -354,21 +362,21 @@ class ClickGuiScreen : Screen(Component.literal("Vape ClickGUI")) {
         when {
             actual is Boolean -> {
                 val text = trimText(font, v.name, (w - 60 - indent).toInt())
-                graphics.drawString(font, Component.literal(text), labelX, y + 3, TEXT_DIM)
+                drawText(ctx, font, text, labelX, y + 3, TEXT_DIM)
                 val status = if (actual) "§aON" else "§cOFF"
-                graphics.drawString(font, Component.literal(status), valueX, y + 3, if (actual) ACCENT else TEXT_DIM)
+                drawText(ctx, font, status, valueX, y + 3, if (actual) ACCENT else TEXT_DIM)
             }
             isBind -> {
                 val bindStr = formatBindValue(v)
                 val text = trimText(font, v.name, (w - 70 - indent).toInt())
-                graphics.drawString(font, Component.literal(text), labelX, y + 3, TEXT_DIM)
+                drawText(ctx, font, text, labelX, y + 3, TEXT_DIM)
                 val isListening = listeningValue == v
                 val display = if (isListening) "§e[等待按键...]" else "§7$bindStr"
-                graphics.drawString(font, Component.literal(display), valueX, y + 3, if (isListening) ACCENT else TEXT_DIM)
+                drawText(ctx, font, display, valueX, y + 3, if (isListening) ACCENT else TEXT_DIM)
             }
             isSlider -> {
                 val text = trimText(font, v.name, (w - 80 - indent).toInt())
-                graphics.drawString(font, Component.literal(text), labelX, y + 2, TEXT_DIM)
+                drawText(ctx, font, text, labelX, y + 2, TEXT_DIM)
 
                 var fv = 0f; var min = 0f; var max = 20f
                 if (actual is ClosedRange<*>) {
@@ -387,25 +395,25 @@ class ClickGuiScreen : Screen(Component.literal("Vape ClickGUI")) {
                 val sliderY = y + 8
                 val progress = ((fv - min) / (max - min)).coerceIn(0f, 1f)
 
-                fillRect(graphics, sliderX, sliderY, sliderX + sliderW, sliderY + 3, 0x30FFFFFF.toInt())
-                fillRect(graphics, sliderX, sliderY, sliderX + (sliderW * progress).toInt(), sliderY + 3, ACCENT)
-                fillRect(graphics, sliderX + (sliderW * progress).toInt() - 2, sliderY - 1, sliderX + (sliderW * progress).toInt() + 2, sliderY + 4, TEXT_BRIGHT)
+                fillRect(ctx, sliderX, sliderY, sliderX + sliderW, sliderY + 3, 0x30FFFFFF.toInt())
+                fillRect(ctx, sliderX, sliderY, sliderX + (sliderW * progress).toInt(), sliderY + 3, ACCENT)
+                fillRect(ctx, sliderX + (sliderW * progress).toInt() - 2, sliderY - 1, sliderX + (sliderW * progress).toInt() + 2, sliderY + 4, TEXT_BRIGHT)
 
                 val valueStr = if (actual is ClosedRange<*>) "${actual.start}-${actual.endInclusive}" else "%.1f".format(fv)
-                graphics.drawString(font, Component.literal(valueStr), sliderX + sliderW + 4, y + 1, TEXT_DIM)
+                drawText(ctx, font, valueStr, sliderX + sliderW + 4, y + 1, TEXT_DIM)
             }
             isColor -> {
                 val text = trimText(font, v.name, (w - 60 - indent).toInt())
-                graphics.drawString(font, Component.literal(text), labelX, y + 3, TEXT_DIM)
+                drawText(ctx, font, text, labelX, y + 3, TEXT_DIM)
                 val color = extractColor(v)
-                fillRect(graphics, valueX, y + 2, valueX + 14, y + 16, color.rgb)
-                fillRect(graphics, valueX, y + 2, valueX + 14, y + 16, BORDER)
+                fillRect(ctx, valueX, y + 2, valueX + 14, y + 16, color.rgb)
+                fillRect(ctx, valueX, y + 2, valueX + 14, y + 16, BORDER)
             }
             else -> {
                 val display = getDisplayValue(v)
                 val text = trimText(font, v.name, (w - 60 - indent).toInt())
-                graphics.drawString(font, Component.literal(text), labelX, y + 3, TEXT_DIM)
-                graphics.drawString(font, Component.literal("§7$display"), valueX, y + 3, TEXT_DIM)
+                drawText(ctx, font, text, labelX, y + 3, TEXT_DIM)
+                drawText(ctx, font, "§7$display", valueX, y + 3, TEXT_DIM)
             }
         }
     }
