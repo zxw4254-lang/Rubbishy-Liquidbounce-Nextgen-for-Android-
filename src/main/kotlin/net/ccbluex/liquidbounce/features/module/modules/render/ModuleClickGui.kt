@@ -28,8 +28,9 @@ import net.ccbluex.liquidbounce.integration.screen.impl.CustomStandaloneMinecraf
 import net.ccbluex.liquidbounce.utils.client.inGame
 import net.ccbluex.liquidbounce.utils.kotlin.EventPriorityConvention.OBJECTION_AGAINST_EVERYTHING
 import net.ccbluex.liquidbounce.utils.kotlin.EventPriorityConvention.READ_FINAL_STATE
-import net.ccbluex.liquidbounce.utils.render.Color4b
+import net.minecraft.client.MinecraftClient
 import org.lwjgl.glfw.GLFW
+import net.ccbluex.liquidbounce.utils.render.Color4b
 
 /**
  * Vape UI 风格的 ClickGUI 模块 - Android 适配（使用 Color4b）
