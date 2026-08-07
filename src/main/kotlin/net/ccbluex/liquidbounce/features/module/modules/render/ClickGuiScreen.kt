@@ -10,7 +10,7 @@ import net.minecraft.client.gui.Font
 import net.minecraft.client.input.MouseButtonEvent
 import net.minecraft.client.input.KeyEvent
 import net.minecraft.client.input.CharacterEvent
-import net.minecraft.client.util.math.MatrixStack
+import net.minecraft.util.math.MatrixStack
 import net.minecraft.network.chat.Component
 import org.lwjgl.glfw.GLFW
 import java.awt.Color
@@ -70,20 +70,7 @@ class ClickGuiScreen : Screen(Component.literal("Vape ClickGUI")) {
 
     private fun fillRect(matrices: MatrixStack, x1: Int, y1: Int, x2: Int, y2: Int, color: Int) {
         if (x2 <= x1 || y2 <= y1) return
-        // 使用 Screen 的 fill 方法（通过反射或直接调用）
-        try {
-            // 尝试直接调用 fill（Screen 的静态方法）
-            net.minecraft.client.gui.screens.Screen.fill(matrices, x1, y1, x2, y2, color)
-        } catch (_: NoSuchMethodError) {
-            // 兼容：使用 DrawableHelper 的 fill（如果存在）
-            try {
-                val helper = Class.forName("net.minecraft.client.gui.DrawableHelper")
-                val method = helper.getMethod("fill", MatrixStack::class.java, Int::class.javaPrimitiveType, Int::class.javaPrimitiveType, Int::class.javaPrimitiveType, Int::class.javaPrimitiveType, Int::class.javaPrimitiveType)
-                method.invoke(null, matrices, x1, y1, x2, y2, color)
-            } catch (_: Exception) {
-                // 最后的备用方案：手动绘制（不推荐，但确保编译通过）
-            }
-        }
+        net.minecraft.client.gui.Gui.drawRect(x1, y1, x2, y2, color)
     }
 
     private fun drawRoundedRect(matrices: MatrixStack, x: Float, y: Float, w: Float, h: Float, radius: Float, color: Int) {
@@ -162,8 +149,8 @@ class ClickGuiScreen : Screen(Component.literal("Vape ClickGUI")) {
 
         // ===== 标题栏 =====
         drawRoundedRect(matrices, winX, winY, WIN_W.toFloat(), HEADER_H.toFloat(), CORNER, HEADER)
-        font.draw(matrices, "§lVape §f§lV5", (winX + 12f).toInt(), (winY + 6f).toInt(), ACCENT)
-        font.draw(matrices, "§7v5.0", (winX + WIN_W - 50f).toInt(), (winY + 7f).toInt(), TEXT_DIM)
+        font.draw(matrices, "§lVape §f§lV5", winX + 12f, winY + 6f, ACCENT)
+        font.draw(matrices, "§7v5.0", winX + WIN_W - 50f, winY + 7f, TEXT_DIM)
 
         // ===== 搜索栏 =====
         val searchY = winY + HEADER_H + 4
@@ -171,10 +158,10 @@ class ClickGuiScreen : Screen(Component.literal("Vape ClickGUI")) {
         val searchW = WIN_W - 16
 
         drawRoundedRect(matrices, searchX, searchY, searchW.toFloat(), SEARCH_H.toFloat(), 6f, 0x28FFFFFF.toInt())
-        font.draw(matrices, "🔍", (searchX + 6f).toInt(), (searchY + 6f).toInt(), TEXT_DIM)
+        font.draw(matrices, "🔍", searchX + 6f, searchY + 6f, TEXT_DIM)
 
         val displayText = if (searchText.isEmpty()) "§7搜索功能..." else "§f$searchText"
-        font.draw(matrices, trimText(font, displayText, searchW - 30), (searchX + 22f).toInt(), (searchY + 6f).toInt(), TEXT)
+        font.draw(matrices, trimText(font, displayText, searchW - 30), searchX + 22f, searchY + 6f, TEXT)
 
         if (searchFocused) {
             val cursorX = searchX.toInt() + 22 + font.width(searchText)
@@ -203,7 +190,7 @@ class ClickGuiScreen : Screen(Component.literal("Vape ClickGUI")) {
 
             val label = trimText(font, cat.tag.uppercase(), tabW - 4)
             val cw = font.width(label)
-            font.draw(matrices, label, tx.toInt() + ((tabW - 2) - cw) / 2, tabY.toInt() + 4, if (isActive) TEXT_BRIGHT else TEXT_DIM)
+            font.draw(matrices, label, tx + ((tabW - 2) - cw) / 2f, tabY + 4f, if (isActive) TEXT_BRIGHT else TEXT_DIM)
         }
 
         // ===== 分割线 =====
@@ -237,7 +224,7 @@ class ClickGuiScreen : Screen(Component.literal("Vape ClickGUI")) {
 
             val nameColor = if (mod.enabled) ACCENT else TEXT_DIM
             val nameText = if (isExpanded) "§n${mod.name}" else mod.name
-            font.draw(matrices, trimText(font, nameText, (listRight - winX - 40).toInt()), winX.toInt() + 14, yPos.toInt() + 5, nameColor)
+            font.draw(matrices, trimText(font, nameText, (listRight - winX - 40).toInt()), winX + 14f, yPos + 5f, nameColor)
 
             // Vape 风格开关
             val toggleX = listRight.toInt() - 26
@@ -264,7 +251,7 @@ class ClickGuiScreen : Screen(Component.literal("Vape ClickGUI")) {
         if (expandedModule != null) {
             renderModuleDetail(matrices, expandedModule!!, detailX, bodyY, detailW, bodyH.toFloat(), mouseX, mouseY)
         } else {
-            font.draw(matrices, "§7选择一个模块配置", detailX.toInt() + 8, bodyY.toInt() + 8, TEXT_DIM)
+            font.draw(matrices, "§7选择一个模块配置", detailX + 8f, bodyY + 8f, TEXT_DIM)
         }
 
         // Flash动画
@@ -274,7 +261,7 @@ class ClickGuiScreen : Screen(Component.literal("Vape ClickGUI")) {
         }
     }
 
-    override fun renderBackground(matrices: MatrixStack, mouseX: Int, mouseY: Int, delta: Float) {
+    override fun renderBackground(matrices: MatrixStack) {
         // 空实现
     }
 
@@ -294,9 +281,9 @@ class ClickGuiScreen : Screen(Component.literal("Vape ClickGUI")) {
         val visibleValues = getVisibleValues(mod)
 
         // 标题
-        font.draw(matrices, "§l${mod.name}", x.toInt() + 8, y.toInt() + 4, if (mod.enabled) ACCENT else TEXT)
+        font.draw(matrices, "§l${mod.name}", x + 8f, y + 4f, if (mod.enabled) ACCENT else TEXT)
         val statusText = if (mod.enabled) "§a● 已启用" else "§c● 已禁用"
-        font.draw(matrices, statusText, x.toInt() + 8, y.toInt() + 18, TEXT_DIM)
+        font.draw(matrices, statusText, x + 8f, y + 18f, TEXT_DIM)
 
         // 分割线
         fillRect(matrices, x.toInt() + 6, y.toInt() + 32, x.toInt() + w - 6, y.toInt() + 33, BORDER)
@@ -330,7 +317,7 @@ class ClickGuiScreen : Screen(Component.literal("Vape ClickGUI")) {
                     val isCollapsed = collapsedGroups.contains(v)
                     val arrow = if (isCollapsed) "▶" else "▼"
                     val groupName = trimText(font, "$arrow ${v.name}", (w - 20 - indent).toInt())
-                    font.draw(matrices, groupName, x.toInt() + 8 + indent.toInt(), yPos + 2, TEXT)
+                    font.draw(matrices, groupName, x + 8 + indent, yPos + 2f, TEXT)
                     if (isHover) fillRect(matrices, x.toInt() + 4, yPos, (x + w - 4).toInt(), yPos + 1, ACCENT)
                 } else {
                     renderParamValue(matrices, v, x, yPos, w, indent, mouseX, mouseY)
@@ -362,21 +349,21 @@ class ClickGuiScreen : Screen(Component.literal("Vape ClickGUI")) {
         when {
             actual is Boolean -> {
                 val text = trimText(font, v.name, (w - 60 - indent).toInt())
-                font.draw(matrices, text, labelX, y + 3, TEXT_DIM)
+                font.draw(matrices, text, labelX.toFloat(), y + 3f, TEXT_DIM)
                 val status = if (actual) "§aON" else "§cOFF"
-                font.draw(matrices, status, valueX, y + 3, if (actual) ACCENT else TEXT_DIM)
+                font.draw(matrices, status, valueX.toFloat(), y + 3f, if (actual) ACCENT else TEXT_DIM)
             }
             isBind -> {
                 val bindStr = formatBindValue(v)
                 val text = trimText(font, v.name, (w - 70 - indent).toInt())
-                font.draw(matrices, text, labelX, y + 3, TEXT_DIM)
+                font.draw(matrices, text, labelX.toFloat(), y + 3f, TEXT_DIM)
                 val isListening = listeningValue == v
                 val display = if (isListening) "§e[等待按键...]" else "§7$bindStr"
-                font.draw(matrices, display, valueX, y + 3, if (isListening) ACCENT else TEXT_DIM)
+                font.draw(matrices, display, valueX.toFloat(), y + 3f, if (isListening) ACCENT else TEXT_DIM)
             }
             isSlider -> {
                 val text = trimText(font, v.name, (w - 80 - indent).toInt())
-                font.draw(matrices, text, labelX, y + 2, TEXT_DIM)
+                font.draw(matrices, text, labelX.toFloat(), y + 2f, TEXT_DIM)
 
                 var fv = 0f; var min = 0f; var max = 20f
                 if (actual is ClosedRange<*>) {
@@ -400,11 +387,11 @@ class ClickGuiScreen : Screen(Component.literal("Vape ClickGUI")) {
                 fillRect(matrices, sliderX + (sliderW * progress).toInt() - 2, sliderY - 1, sliderX + (sliderW * progress).toInt() + 2, sliderY + 4, TEXT_BRIGHT)
 
                 val valueStr = if (actual is ClosedRange<*>) "${actual.start}-${actual.endInclusive}" else "%.1f".format(fv)
-                font.draw(matrices, valueStr, sliderX + sliderW + 4, y + 1, TEXT_DIM)
+                font.draw(matrices, valueStr, sliderX + sliderW + 4f, y + 1f, TEXT_DIM)
             }
             isColor -> {
                 val text = trimText(font, v.name, (w - 60 - indent).toInt())
-                font.draw(matrices, text, labelX, y + 3, TEXT_DIM)
+                font.draw(matrices, text, labelX.toFloat(), y + 3f, TEXT_DIM)
                 val color = extractColor(v)
                 fillRect(matrices, valueX, y + 2, valueX + 14, y + 16, color.rgb)
                 fillRect(matrices, valueX, y + 2, valueX + 14, y + 16, BORDER)
@@ -412,8 +399,8 @@ class ClickGuiScreen : Screen(Component.literal("Vape ClickGUI")) {
             else -> {
                 val display = getDisplayValue(v)
                 val text = trimText(font, v.name, (w - 60 - indent).toInt())
-                font.draw(matrices, text, labelX, y + 3, TEXT_DIM)
-                font.draw(matrices, "§7$display", valueX, y + 3, TEXT_DIM)
+                font.draw(matrices, text, labelX.toFloat(), y + 3f, TEXT_DIM)
+                font.draw(matrices, "§7$display", valueX.toFloat(), y + 3f, TEXT_DIM)
             }
         }
     }
@@ -541,8 +528,8 @@ class ClickGuiScreen : Screen(Component.literal("Vape ClickGUI")) {
 
     override fun charTyped(event: CharacterEvent): Boolean {
         if (searchFocused) {
-            // CharacterEvent 在旧版本中可能有 codePoint 属性或使用 character
             val charCode = try {
+                // 尝试通过反射获取 codePoint
                 event.javaClass.getMethod("codePoint")?.invoke(event) as? Int ?: event.character.code
             } catch (_: Exception) {
                 event.character.code
