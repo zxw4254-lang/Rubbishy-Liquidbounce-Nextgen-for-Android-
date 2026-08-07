@@ -88,8 +88,9 @@ allprojects {
 
 loom {
     accessWidenerPath = file("src/main/resources/liquidbounce.accesswidener")
-    // 按照你的攻略，使用正确的函数调用，不接参数也不用赋值号
-    mappings(loom.officialMojangMappings())
+    
+    // [Kotlin DSL 标准写法] 显示指定调用 Loom 扩展的 mappings 方法
+    loom.mappings(loom.officialMojangMappings())
 }
 
 dependencies {
