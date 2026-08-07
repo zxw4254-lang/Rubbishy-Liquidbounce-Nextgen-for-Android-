@@ -10,9 +10,8 @@ import net.minecraft.client.gui.Font
 import net.minecraft.client.input.MouseButtonEvent
 import net.minecraft.client.input.KeyEvent
 import net.minecraft.client.input.CharacterEvent
-import net.minecraft.client.util.math.MatrixStack
+import net.minecraft.util.math.MatrixStack
 import net.minecraft.network.chat.Component
-import net.minecraft.util.math.MathHelper
 import org.lwjgl.glfw.GLFW
 import java.awt.Color
 import kotlin.math.cos
@@ -20,7 +19,7 @@ import kotlin.math.max
 import kotlin.math.sin
 
 /**
- * Vape UI 风格的 ClickGUI 屏幕 - 使用 Tessellator 渲染
+ * Vape UI 风格的 ClickGUI 屏幕
  */
 class ClickGuiScreen : Screen(Component.literal("Vape ClickGUI")) {
 
@@ -67,23 +66,23 @@ class ClickGuiScreen : Screen(Component.literal("Vape ClickGUI")) {
     override fun isPauseScreen() = false
     override fun shouldCloseOnEsc() = true
 
-    // ==================== 绘制工具（Tessellator） ====================
+    // ==================== 绘制工具 ====================
 
     private fun fillRect(matrices: MatrixStack, x1: Int, y1: Int, x2: Int, y2: Int, color: Int) {
         if (x2 <= x1 || y2 <= y1) return
-        val matrix = matrices.last().positionMatrix
-        val tessellator = net.minecraft.client.render.Tessellator.getInstance()
-        val buffer = tessellator.buffer
-        buffer.begin(net.minecraft.client.render.VertexFormat.DrawMode.QUADS, net.minecraft.client.render.VertexFormats.POSITION_COLOR)
+        val matrix = matrices.last().pose
+        val tessellator = net.minecraft.client.renderer.Tessellator.getInstance()
+        val buffer = tessellator.builder
+        buffer.begin(net.minecraft.client.renderer.VertexFormat.Mode.QUADS, net.minecraft.client.renderer.VertexFormats.POSITION_COLOR)
         val r = (color shr 16 and 0xFF) / 255f
         val g = (color shr 8 and 0xFF) / 255f
         val b = (color and 0xFF) / 255f
         val a = (color shr 24 and 0xFF) / 255f
-        buffer.vertex(matrix, x1.toFloat(), y2.toFloat(), 0f).color(r, g, b, a).next()
-        buffer.vertex(matrix, x2.toFloat(), y2.toFloat(), 0f).color(r, g, b, a).next()
-        buffer.vertex(matrix, x2.toFloat(), y1.toFloat(), 0f).color(r, g, b, a).next()
-        buffer.vertex(matrix, x1.toFloat(), y1.toFloat(), 0f).color(r, g, b, a).next()
-        tessellator.draw()
+        buffer.vertex(matrix, x1.toFloat(), y2.toFloat(), 0f).color(r, g, b, a).endVertex()
+        buffer.vertex(matrix, x2.toFloat(), y2.toFloat(), 0f).color(r, g, b, a).endVertex()
+        buffer.vertex(matrix, x2.toFloat(), y1.toFloat(), 0f).color(r, g, b, a).endVertex()
+        buffer.vertex(matrix, x1.toFloat(), y1.toFloat(), 0f).color(r, g, b, a).endVertex()
+        tessellator.end()
     }
 
     private fun drawRoundedRect(matrices: MatrixStack, x: Float, y: Float, w: Float, h: Float, radius: Float, color: Int) {
@@ -210,7 +209,7 @@ class ClickGuiScreen : Screen(Component.literal("Vape ClickGUI")) {
         val divY = tabY + TAB_H + 1
         fillRect(matrices, winX.toInt() + 8, divY.toInt(), winX.toInt() + WIN_W - 8, divY.toInt() + 1, BORDER)
 
-        // ===== 主体（不使用 scissor，通过 y 坐标过滤） =====
+        // ===== 主体 =====
         val bodyY = divY + 4
         val bodyH = WIN_H - (bodyY - winY) - 6
         val listRight = winX + WIN_W - PANEL_W - 6
@@ -257,12 +256,12 @@ class ClickGuiScreen : Screen(Component.literal("Vape ClickGUI")) {
 
         // ---- 右侧详情面板 ----
         val detailX = listRight + 2
-        val detailW = PANEL_W - 4
+        val detailW = (PANEL_W - 4).toFloat()
 
-        drawRoundedRect(matrices, detailX, bodyY, detailW.toFloat(), bodyH.toFloat(), 6f, PANEL)
+        drawRoundedRect(matrices, detailX, bodyY, detailW, bodyH.toFloat(), 6f, PANEL)
 
         if (expandedModule != null) {
-            renderModuleDetail(matrices, expandedModule!!, detailX, bodyY, detailW, bodyH, mouseX, mouseY)
+            renderModuleDetail(matrices, expandedModule!!, detailX, bodyY, detailW, bodyH.toFloat(), mouseX, mouseY)
         } else {
             font.draw(matrices, "§7选择一个模块配置", detailX.toInt() + 8f, bodyY.toInt() + 8f, TEXT_DIM)
         }
@@ -418,12 +417,12 @@ class ClickGuiScreen : Screen(Component.literal("Vape ClickGUI")) {
         }
     }
 
-    // ==================== 事件处理（新签名） ====================
+    // ==================== 事件处理 ====================
 
-    override fun mouseClicked(event: MouseButtonEvent, doubled: Boolean): Boolean {
-        val btn = event.button()
-        val mx = event.x().toInt()
-        val my = event.y().toInt()
+    override fun mouseClicked(mouseX: Double, mouseY: Double, button: Int): Boolean {
+        val btn = button
+        val mx = mouseX.toInt()
+        val my = mouseY.toInt()
         val sc = minecraft!!.window.guiScaledWidth
         val sh = minecraft!!.window.guiScaledHeight
         val winX = (sc - WIN_W) / 2f
@@ -487,19 +486,18 @@ class ClickGuiScreen : Screen(Component.literal("Vape ClickGUI")) {
             handleDetailClick(expandedModule!!, mx.toFloat(), my.toFloat(), btn)
         }
 
-        return super.mouseClicked(event, doubled)
+        return super.mouseClicked(mouseX, mouseY, button)
     }
 
     private fun handleDetailClick(mod: ClientModule, mx: Float, my: Float, btn: Int) {
         // 可扩展参数点击逻辑
     }
 
-    override fun mouseScrolled(event: net.minecraft.client.input.MouseScrollEvent): Boolean {
+    override fun mouseScrolled(mouseX: Double, mouseY: Double, horizontal: Double, vertical: Double): Boolean {
         val winX = (minecraft!!.window.guiScaledWidth - WIN_W) / 2f
         val listRight = winX + WIN_W - PANEL_W - 6
 
-        val vertical = event.vertical()
-        if (event.x() >= listRight) {
+        if (mouseX >= listRight) {
             targetDetailScroll = (targetDetailScroll - vertical.toFloat() * 15f).coerceAtLeast(0f)
         } else {
             targetScroll = (targetScroll - vertical.toFloat() * 15f).coerceAtLeast(0f)
@@ -507,19 +505,19 @@ class ClickGuiScreen : Screen(Component.literal("Vape ClickGUI")) {
         return true
     }
 
-    override fun keyPressed(event: KeyEvent): Boolean {
+    override fun keyPressed(keyCode: Int, scanCode: Int, modifiers: Int): Boolean {
         if (listeningValue != null) {
             listeningValue = null
             return true
         }
 
-        if (event.key() == GLFW.GLFW_KEY_ESCAPE) {
+        if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
             onClose()
             return true
         }
 
         if (searchFocused) {
-            when (event.key()) {
+            when (keyCode) {
                 GLFW.GLFW_KEY_BACKSPACE -> {
                     if (searchText.isNotEmpty()) searchText = searchText.dropLast(1)
                     return true
@@ -529,7 +527,7 @@ class ClickGuiScreen : Screen(Component.literal("Vape ClickGUI")) {
                     return true
                 }
                 else -> {
-                    val name = GLFW.glfwGetKeyName(event.key(), 0)
+                    val name = GLFW.glfwGetKeyName(keyCode, 0)
                     if (name != null && name.length == 1) {
                         searchText += name
                         return true
@@ -537,15 +535,15 @@ class ClickGuiScreen : Screen(Component.literal("Vape ClickGUI")) {
                 }
             }
         }
-        return super.keyPressed(event)
+        return super.keyPressed(keyCode, scanCode, modifiers)
     }
 
-    override fun charTyped(event: CharacterEvent): Boolean {
-        if (searchFocused && event.codePoint() > 31) {
-            searchText += event.codePoint().toChar()
+    override fun charTyped(character: Char, modifiers: Int): Boolean {
+        if (searchFocused && character.code > 31) {
+            searchText += character
             return true
         }
-        return super.charTyped(event)
+        return super.charTyped(character, modifiers)
     }
 
     override fun onClose() {
@@ -553,7 +551,7 @@ class ClickGuiScreen : Screen(Component.literal("Vape ClickGUI")) {
         fadeAnim = 0f
     }
 
-    // ==================== 辅助方法（保持不变） ====================
+    // ==================== 辅助方法 ====================
 
     private fun getVisibleValues(module: ClientModule): List<Pair<Value<*>, Int>> {
         val result = mutableListOf<Pair<Value<*>, Int>>()
