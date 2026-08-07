@@ -19,7 +19,6 @@
 
 import com.github.gradle.node.npm.task.NpmTask
 import dev.detekt.gradle.DetektCreateBaselineTask
-import net.fabricmc.loom.api.LoomExtension
 import groovy.json.JsonOutput
 import org.gradle.api.tasks.PathSensitivity
 import org.gradle.jvm.tasks.Jar
@@ -90,10 +89,6 @@ allprojects {
 loom {
     accessWidenerPath = file("src/main/resources/liquidbounce.accesswidener")
 }
-
-// 直接使用 Gradle 扩展库取回 Loom 实例并配置映射，不会再有作用域错误
-val loomExtension = extensions.getByType(LoomExtension::class.java)
-loomExtension.mappings = loomExtension.officialMojangMappings()
 
 dependencies {
     // Minecraft
