@@ -23,6 +23,7 @@ import groovy.json.JsonOutput
 import org.gradle.api.tasks.PathSensitivity
 import org.gradle.jvm.tasks.Jar
 import org.gradle.kotlin.dsl.support.listFilesOrdered
+import net.fabricmc.loom.api.LoomExtension
 
 plugins {
     alias(libs.plugins.fabric.loom)
@@ -90,12 +91,13 @@ loom {
     accessWidenerPath = file("src/main/resources/liquidbounce.accesswidener")
 }
 
-// ==========================================================
-// 【终极解决办法】：强制在全局作用域获取 Loom 扩展并应用映射。
-// 这样写将 100% 绕过 Kotlin DSL 中 loom 内部解析不到 mappings 的 Bug。
-// ==========================================================
-the<net.fabricmc.loom.api.LoomExtension>().mappings = the<net.fabricmc.loom.api.LoomExtension>().officialMojangMappings()
-// ==========================================================
+loom {
+    accessWidenerPath = file("src/main/resources/liquidbounce.accesswidener")
+}
+
+// 直接使用 Gradle 扩展库取回 Loom 实例并配置映射，不会再有作用域错误
+val loomExtension = extensions.getByType(LoomExtension::class.java)
+loomExtension.mappings = loomExtension.officialMojangMappings()
 
 dependencies {
     // Minecraft
