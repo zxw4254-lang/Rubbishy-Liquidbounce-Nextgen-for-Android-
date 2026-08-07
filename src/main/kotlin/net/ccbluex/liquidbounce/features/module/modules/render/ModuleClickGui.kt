@@ -118,9 +118,12 @@ object ModuleClickGui :
             return
         }
 
-        updateStandaloneScreen()
+        // [修改点 1]：Android环境移除所有的 StandaloneScreen 依赖，防止 Browser backend 崩溃
+        // updateStandaloneScreen() 
+        
         mc.execute {
-            mc.gui.setScreen(standaloneScreen ?: CustomSharedMinecraftScreen(CustomScreenType.CLICK_GUI))
+            // [修改点 2]：强制使用 SharedScreen，绝不使用 standaloneScreen
+            mc.gui.setScreen(CustomSharedMinecraftScreen(CustomScreenType.CLICK_GUI))
         }
         super.onEnabled()
     }
@@ -129,14 +132,14 @@ object ModuleClickGui :
     private val worldChangeHandler = sequenceHandler<WorldChangeEvent>(
         priority = OBJECTION_AGAINST_EVERYTHING
     ) { event ->
-        if (event.world == null || !useStandaloneScreen) {
-            return@sequenceHandler
-        }
-
-        waitSeconds(1)
-        if (updateStandaloneScreen()) {
-            standaloneScreen?.sync()
-        }
+        // [修改点 3]：Android环境不执行独立屏幕更新逻辑
+        // if (event.world == null || !useStandaloneScreen) {
+        //     return@sequenceHandler
+        // }
+        // waitSeconds(1)
+        // if (updateStandaloneScreen()) {
+        //     standaloneScreen?.sync()
+        // }
     }
 
     @Suppress("unused")
@@ -147,32 +150,34 @@ object ModuleClickGui :
 
     @Suppress("unused")
     private val tickHandler = handler<GameTickEvent> {
-        // For some reason, we actually need this.
-        standaloneScreen?.browser?.visible = mc.gui.screen() == standaloneScreen
+        // [修改点 4]：防止为空指针和浏览器逻辑调用
+        // standaloneScreen?.browser?.visible = mc.gui.screen() == standaloneScreen
     }
 
     fun updateStandaloneScreen(): Boolean {
-        // Standalone Screen Cache
+        // [修改点 5]：直接返回 false，彻底废弃该方法（防止其他地方意外调用导致崩溃）
+        return false 
+        
+        // 原逻辑已全部废弃，兼容安卓环境
+        /* 
         if (useStandaloneScreen) {
             if (standaloneScreen == null) {
                 standaloneScreen = CustomStandaloneMinecraftScreen(CustomScreenType.CLICK_GUI)
             } else {
-                // Used in [worldChangeHandler] to determine if we need to sync.
                 return true
             }
         } else if (standaloneScreen != null) {
             standaloneScreen?.close()
             standaloneScreen = null
         }
-
         return false
+        */
     }
 
     fun sync() {
         if (!LiquidBounce.isInitialized) {
             return
         }
-
         standaloneScreen?.sync()
     }
 
