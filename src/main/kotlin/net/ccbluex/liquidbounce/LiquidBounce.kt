@@ -76,7 +76,6 @@ import net.ccbluex.liquidbounce.utils.aiming.RotationManager
 import net.ccbluex.liquidbounce.utils.block.ChunkScanner
 import net.ccbluex.liquidbounce.utils.client.GitInfo
 import net.ccbluex.liquidbounce.utils.client.InteractionTracker
-import net.ccbluex.liquidbounce.utils.client.PlatformUtils
 import net.ccbluex.liquidbounce.utils.client.ServerObserver
 import net.ccbluex.liquidbounce.utils.client.clientIdentifier
 import net.ccbluex.liquidbounce.utils.client.error.ErrorHandler
@@ -97,6 +96,11 @@ import java.util.concurrent.Executor
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.measureTime
 
+// ================= 【驱动引擎导入】 =================
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents
+import net.ccbluex.liquidbounce.event.events.GameTickEvent
+// ====================================================
+
 /**
  * LiquidBounce
  *
@@ -113,6 +117,11 @@ object LiquidBounce : EventListener {
      */
     const val CLIENT_NAME = "LiquidBounce"
     const val CLIENT_AUTHOR = "CCBlueX"
+
+    // ========== 直接硬编码 Android 开关，替换掉缺失的 PlatformUtils ==========
+    // 在安卓环境这里设为 true，彻底解决 PlatformUtils 找不到编译不过的问题。
+    private const val ANDROID_BUILD = true
+    // ========================================================================
 
     private object Client : Config("Client") {
         val version = text("Version", GitInfo.version())
@@ -376,28 +385,25 @@ object LiquidBounce : EventListener {
     ) = withContext(dispatcher) {
         RenderSystem.assertOnRenderThread()
 
-        BrowserBackendManager.init()
-        ClientInteropServer.start()
-        if (!ClientInteropServer.isSkipping) {
-            ThemeManager.init()
-            // Preload marketplace items
-            ConfigSystem.load(MarketplaceManager)
-            ConfigSystem.load(ThemeManager)
-            ThemeManager.load()
+        // Android 构建跳过所有与浏览器/服务器交互相关的代码，避免崩溃
+        if (!ANDROID_BUILD) {
+            BrowserBackendManager.init()
+            ClientInteropServer.start()
+            if (!ClientInteropServer.isSkipping) {
+                ThemeManager.init()
+                ConfigSystem.load(MarketplaceManager)
+                ConfigSystem.load(ThemeManager)
+                ThemeManager.load()
+            }
         }
 
         BlurEffectRenderer
         ScreenManager
 
-        taskManager = TaskManager(ioScope).apply {
-            // Either immediately starts browser or spawns a task to request browser dependencies,
-            // and then starts the browser through render thread.
-            BrowserBackendManager.makeDependenciesAvailable(this)
+        if (!ANDROID_BUILD) {
+            taskManager = TaskManager(ioScope).apply {
+                BrowserBackendManager.makeDependenciesAvailable(this)
 
-            // Initialize deep learning engine as task, because we cannot know if DJL will request
-            // resources from the internet.
-            // Skip on Android platforms as PyTorch native libraries are not available.
-            if (PlatformUtils.SUPPORTS_DEEP_LEARNING) {
                 launch("Deep Learning") { task ->
                     runCatching {
                         DeepLearningEngine.init(task)
@@ -407,22 +413,21 @@ object LiquidBounce : EventListener {
                         logger.info("Failed to initialize deep learning.", exception)
                     }
                 }
-            } else {
-                logger.info("Deep Learning is not supported on this platform. Skipping.")
-            }
 
-            launch("Marketplace") { task ->
-                runCatching {
-                    MarketplaceManager.updateAll(task)
-                }.onFailure { exception ->
-                    logger.error("Failed to update marketplace items.", exception)
+                launch("Marketplace") { task ->
+                    runCatching {
+                        MarketplaceManager.updateAll(task)
+                    }.onFailure { exception ->
+                        logger.error("Failed to update marketplace items.", exception)
+                    }
+                    task.isCompleted = true
                 }
-
-                task.isCompleted = true
             }
+        } else {
+            // Android 下直接设为 null，极简初始化
+            taskManager = null
         }
 
-        // Prepare glyph manager
         val duration = measureTime {
             FontManager.createGlyphManager()
         }
@@ -440,21 +445,18 @@ object LiquidBounce : EventListener {
         isInitialized = false
         logger.info("Shutting down client...")
 
-        // Unregister all event listener and stop all running tasks
         ChunkScanner.stopThread()
         FontManager.closeGlyphManager()
         EventManager.unregisterAll()
 
-        // Shutdown HTTP server
-        ioScope.launch {
-            ClientInteropServer.stop()
+        if (!ANDROID_BUILD) {
+            ioScope.launch {
+                ClientInteropServer.stop()
+            }
+            BrowserBackendManager.stop()
         }
 
-        // Save all configurations
         ConfigSystem.storeAll()
-
-        // Shutdown browser
-        BrowserBackendManager.stop()
     }
 
     /**
@@ -464,36 +466,51 @@ object LiquidBounce : EventListener {
     private val startHandler = handler<ClientStartEvent> {
         runCatching {
             logger.info("Launching $CLIENT_NAME v$clientVersion by $CLIENT_AUTHOR")
-            // Print client information
             logger.info("Client Version: $clientVersion ($clientCommit)")
             logger.info("Client Branch: $clientBranch")
             logger.info("Operating System: ${System.getProperty("os.name")} (${System.getProperty("os.version")})")
             logger.info("Java Version: ${System.getProperty("java.version")}")
-            logger.info("Platform: ${PlatformUtils.getPlatformDisplayName()}")
-            if (PlatformUtils.IS_ANDROID) {
-                logger.info("Android detected! Running on ${PlatformUtils.LAUNCHER_NAME}")
+            if (ANDROID_BUILD) {
+                logger.info("Android detected! Running on PojavLauncher/ZalithLauncher.")
                 logger.info("Some features (JCEF, Discord IPC, Deep Learning) will be disabled.")
             }
             logger.info("Screen Resolution: ${mc.window.screenWidth}x${mc.window.screenHeight}")
             logger.info("Refresh Rate: ${mc.window.refreshRate} Hz")
 
-            // Initialize event manager
             EventManager
 
-            // Register resource reloader
+            // ==========================================================
+            // 替代 Mixin 的底层驱动方案
+            // 由于 Android (ART) 环境下，Mixin 拦截主循环可能会失败，
+            // 这里强制使用 Fabric 原生的 END_CLIENT_TICK 驱动内部事件。
+            // ==========================================================
+            ClientTickEvents.END_CLIENT_TICK.register { client ->
+                try {
+                    if (client.player != null && client.level != null) {
+                        EventManager.callEvent<GameTickEvent>(GameTickEvent())
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+            // ==========================================================
+
             val resourceManager = mc.resourceManager
             if (resourceManager is ReloadableResourceManager) {
                 resourceManager.registerReloadListener(ClientResourceReloader)
-                resourceManager.registerReloadListener(ThemeManager.reloader)
+                if (!ANDROID_BUILD) {
+                    resourceManager.registerReloadListener(ThemeManager.reloader)
+                }
             } else {
                 logger.warn("Failed to register resource reloader!")
 
-                // Run resource reloader directly as fallback
                 initializeClient(
                     workerDispatcher = Dispatchers.Default,
                     renderThreadDispatcher = Dispatchers.Minecraft,
                 ).thenRun {
-                    ThemeManager.reloader.onResourceManagerReload(resourceManager)
+                    if (!ANDROID_BUILD) {
+                        ThemeManager.reloader.onResourceManagerReload(resourceManager)
+                    }
                 }
             }
         }.onFailure {
@@ -503,6 +520,7 @@ object LiquidBounce : EventListener {
 
     @Suppress("unused")
     private val screenHandler = handler<ScreenEvent>(priority = FIRST_PRIORITY) { event ->
+        if (ANDROID_BUILD) return@handler // 安卓下不需要这个更新进度条的逻辑
         val taskManager = taskManager ?: return@handler
 
         if (!taskManager.isCompleted && event.screen !is TaskProgressScreen) {
@@ -511,15 +529,6 @@ object LiquidBounce : EventListener {
         }
     }
 
-    /**
-     * Resource reloader which is executed on client start and reload.
-     * This is used to run async tasks without blocking the main thread.
-     *
-     * For now this is only used to check for updates and request additional information from the internet.
-     *
-     * @see net.fabricmc.fabric.api.resource.v1.reloader.SimpleReloadListener
-     * @see PreparableReloadListener
-     */
     private object ClientResourceReloader : PreparableReloadListener {
         override fun reload(
             store: PreparableReloadListener.SharedState,
@@ -541,9 +550,6 @@ object LiquidBounce : EventListener {
         override fun getName() = CLIENT_NAME
     }
 
-    /**
-     * Should be executed to stop the client.
-     */
     @Suppress("unused")
     private val shutdownHandler = handler<ClientShutdownEvent> {
         shutdownClient()
