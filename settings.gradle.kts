@@ -24,7 +24,7 @@ pluginManagement {
             url = uri("https://maven.fabricmc.net/")
         }
         maven {
-            name = "FabricSnapshots"
+            name = "Fabric Snapshots"
             url = uri("https://maven.fabricmc.net/snapshots/")
         }
         gradlePluginPortal()
