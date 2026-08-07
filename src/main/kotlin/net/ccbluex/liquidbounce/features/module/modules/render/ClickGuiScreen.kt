@@ -79,11 +79,11 @@ class ClickGuiScreen : Screen(Component.literal("Vape ClickGUI")) {
     }
 
     private fun drawText(ctx: GuiGraphicsExtractor, font: Font, text: String, x: Int, y: Int, color: Int) {
-        ctx.drawString(font, Component.literal(text), x, y, color)
+        ctx.text(font, text, x, y, color)
     }
 
     private fun drawText(ctx: GuiGraphicsExtractor, font: Font, text: Component, x: Int, y: Int, color: Int) {
-        ctx.drawString(font, text, x, y, color)
+        ctx.text(font, text.string, x, y, color)
     }
 
     private fun drawRoundedRect(ctx: GuiGraphicsExtractor, x: Float, y: Float, w: Float, h: Float, radius: Float, color: Int) {
