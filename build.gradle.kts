@@ -94,7 +94,7 @@ dependencies {
     // Minecraft
     minecraft(libs.minecraft)
 
-    mappings("net.fabricmc:mojang:${project.property("mod_mc_version")}")
+    add("mappings", "net.fabricmc:mojang:${project.property("mod_mc_version")}")
     
     // Fabric
     api(libs.fabric.loader)
