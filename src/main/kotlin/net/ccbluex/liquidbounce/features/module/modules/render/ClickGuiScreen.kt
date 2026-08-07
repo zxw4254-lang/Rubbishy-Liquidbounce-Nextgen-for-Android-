@@ -7,7 +7,7 @@ import net.ccbluex.liquidbounce.features.module.ModuleCategories
 import net.ccbluex.liquidbounce.features.module.ModuleManager
 import net.minecraft.client.gui.screens.Screen
 import net.minecraft.client.gui.Font
-import net.minecraft.client.gui.DrawContext
+import net.minecraft.client.gui.GuiGraphicsExtractor
 import net.minecraft.client.input.MouseButtonEvent
 import net.minecraft.client.input.KeyEvent
 import net.minecraft.client.input.CharacterEvent
@@ -68,25 +68,25 @@ class ClickGuiScreen : Screen(Component.literal("Vape ClickGUI")) {
 
     // ==================== 绘制工具 ====================
 
-    private fun fillRect(ctx: DrawContext, x1: Int, y1: Int, x2: Int, y2: Int, color: Int) {
+    private fun fillRect(ctx: GuiGraphicsExtractor, x1: Int, y1: Int, x2: Int, y2: Int, color: Int) {
         if (x2 <= x1 || y2 <= y1) return
         ctx.fill(x1, y1, x2, y2, color)
     }
 
-    private fun fillRect(ctx: DrawContext, x1: Float, y1: Float, x2: Float, y2: Float, color: Int) {
+    private fun fillRect(ctx: GuiGraphicsExtractor, x1: Float, y1: Float, x2: Float, y2: Float, color: Int) {
         if (x2 <= x1 || y2 <= y1) return
         ctx.fill(x1.toInt(), y1.toInt(), x2.toInt(), y2.toInt(), color)
     }
 
-    private fun drawText(ctx: DrawContext, font: Font, text: String, x: Int, y: Int, color: Int) {
-        ctx.drawText(font, Component.literal(text), x, y, color, false)
+    private fun drawText(ctx: GuiGraphicsExtractor, font: Font, text: String, x: Int, y: Int, color: Int) {
+        ctx.drawString(font, Component.literal(text), x, y, color)
     }
 
-    private fun drawText(ctx: DrawContext, font: Font, text: Component, x: Int, y: Int, color: Int) {
-        ctx.drawText(font, text, x, y, color, false)
+    private fun drawText(ctx: GuiGraphicsExtractor, font: Font, text: Component, x: Int, y: Int, color: Int) {
+        ctx.drawString(font, text, x, y, color)
     }
 
-    private fun drawRoundedRect(ctx: DrawContext, x: Float, y: Float, w: Float, h: Float, radius: Float, color: Int) {
+    private fun drawRoundedRect(ctx: GuiGraphicsExtractor, x: Float, y: Float, w: Float, h: Float, radius: Float, color: Int) {
         val r = radius.coerceAtMost(w / 2f).coerceAtMost(h / 2f)
         val x1 = x; val y1 = y; val x2 = x + w; val y2 = y + h
 
@@ -100,7 +100,7 @@ class ClickGuiScreen : Screen(Component.literal("Vape ClickGUI")) {
         drawCorner(ctx, x1 + r, y2 - r, r, 90f, 180f, color)
     }
 
-    private fun drawCorner(ctx: DrawContext, cx: Float, cy: Float, r: Float, start: Float, end: Float, color: Int) {
+    private fun drawCorner(ctx: GuiGraphicsExtractor, cx: Float, cy: Float, r: Float, start: Float, end: Float, color: Int) {
         var a = start
         while (a < end) {
             val rad1 = Math.toRadians(a.toDouble())
@@ -118,7 +118,7 @@ class ClickGuiScreen : Screen(Component.literal("Vape ClickGUI")) {
         }
     }
 
-    private fun drawVapeShadow(ctx: DrawContext, x: Float, y: Float, w: Float, h: Float) {
+    private fun drawVapeShadow(ctx: GuiGraphicsExtractor, x: Float, y: Float, w: Float, h: Float) {
         for (i in 0..8) {
             val offset = i.toFloat()
             val alpha = (15 * (1f - i / 8f)).toInt()
@@ -144,7 +144,7 @@ class ClickGuiScreen : Screen(Component.literal("Vape ClickGUI")) {
 
     // ==================== 核心渲染 ====================
 
-    override fun render(ctx: DrawContext, mouseX: Int, mouseY: Int, delta: Float) {
+    override fun extractRenderState(ctx: GuiGraphicsExtractor, mouseX: Int, mouseY: Int, delta: Float) {
         fadeAnim += (1f - fadeAnim) * 0.2f
         val alpha = fadeAnim.coerceIn(0f, 1f)
         if (alpha < 0.01f) return
@@ -274,14 +274,14 @@ class ClickGuiScreen : Screen(Component.literal("Vape ClickGUI")) {
         }
     }
 
-    override fun renderBackground(ctx: DrawContext, mouseX: Int, mouseY: Int, delta: Float) {
+    override fun extractBackground(ctx: GuiGraphicsExtractor, mouseX: Int, mouseY: Int, delta: Float) {
         // 空实现：不绘制默认背景
     }
 
     // ==================== 详情面板 ====================
 
     private fun renderModuleDetail(
-        ctx: DrawContext,
+        ctx: GuiGraphicsExtractor,
         mod: ClientModule,
         x: Float,
         y: Float,
@@ -341,7 +341,7 @@ class ClickGuiScreen : Screen(Component.literal("Vape ClickGUI")) {
     }
 
     private fun renderParamValue(
-        ctx: DrawContext,
+        ctx: GuiGraphicsExtractor,
         v: Value<*>,
         x: Float,
         y: Int,
