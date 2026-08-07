@@ -29,7 +29,6 @@ import net.ccbluex.liquidbounce.utils.client.inGame
 import net.ccbluex.liquidbounce.utils.kotlin.EventPriorityConvention.OBJECTION_AGAINST_EVERYTHING
 import net.ccbluex.liquidbounce.utils.kotlin.EventPriorityConvention.READ_FINAL_STATE
 import net.ccbluex.liquidbounce.render.engine.type.Color4b
-import net.minecraft.client.MinecraftClient
 import net.minecraft.client.gui.screens.Screen
 import org.lwjgl.glfw.GLFW
 
@@ -252,14 +251,25 @@ object ModuleClickGui :
         }
     }
 
-    // ==================== setScreen 兼容垫片 ====================
+    // ==================== setScreen 兼容垫片（不依赖 MinecraftClient 类） ====================
     private fun setScreenCompat(screen: Screen?) {
+        val client = mc
         try {
-            MinecraftClient.getInstance().javaClass.getMethod("setScreen", Screen::class.java)?.invoke(MinecraftClient.getInstance(), screen)
+            client.javaClass.getMethod("setScreen", Screen::class.java)?.invoke(client, screen)
+            return
         } catch (_: NoSuchMethodException) {
-            try {
-                MinecraftClient.getInstance().javaClass.getMethod("displayGuiScreen", Screen::class.java)?.invoke(MinecraftClient.getInstance(), screen)
-            } catch (_: Exception) { /* ignore */ }
-        } catch (_: Exception) { /* ignore */ }
+            // ignore
+        }
+        try {
+            client.javaClass.getMethod("openScreen", Screen::class.java)?.invoke(client, screen)
+            return
+        } catch (_: NoSuchMethodException) {
+            // ignore
+        }
+        try {
+            client.javaClass.getMethod("displayGuiScreen", Screen::class.java)?.invoke(client, screen)
+        } catch (_: Exception) {
+            // ignore
+        }
     }
 }

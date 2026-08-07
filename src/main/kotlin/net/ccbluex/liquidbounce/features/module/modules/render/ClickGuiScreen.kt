@@ -10,7 +10,7 @@ import net.minecraft.client.gui.Font
 import net.minecraft.client.input.MouseButtonEvent
 import net.minecraft.client.input.KeyEvent
 import net.minecraft.client.input.CharacterEvent
-import net.minecraft.client.util.math.MatrixStack
+import net.minecraft.util.math.MatrixStack
 import net.minecraft.network.chat.Component
 import org.lwjgl.glfw.GLFW
 import java.awt.Color
@@ -66,7 +66,7 @@ class ClickGuiScreen : Screen(Component.literal("Vape ClickGUI")) {
     override fun isPauseScreen() = false
     override fun shouldCloseOnEsc() = true
 
-    // ==================== 绘制工具（使用 Tessellator） ====================
+    // ==================== 绘制工具 ====================
 
     private fun fillRect(matrices: MatrixStack, x1: Int, y1: Int, x2: Int, y2: Int, color: Int) {
         if (x2 <= x1 || y2 <= y1) return
@@ -417,7 +417,7 @@ class ClickGuiScreen : Screen(Component.literal("Vape ClickGUI")) {
         }
     }
 
-    // ==================== 事件处理（匹配当前映射） ====================
+    // ==================== 事件处理 ====================
 
     override fun mouseClicked(event: MouseButtonEvent, doubleClick: Boolean): Boolean {
         val btn = event.button()
@@ -539,8 +539,8 @@ class ClickGuiScreen : Screen(Component.literal("Vape ClickGUI")) {
     }
 
     override fun charTyped(event: CharacterEvent): Boolean {
-        if (searchFocused && event.codePoint() > 31) {
-            searchText += event.codePoint().toChar()
+        if (searchFocused && event.codePoint > 31) {
+            searchText += event.codePoint.toChar()
             return true
         }
         return super.charTyped(event)
@@ -553,13 +553,24 @@ class ClickGuiScreen : Screen(Component.literal("Vape ClickGUI")) {
 
     // ==================== setScreen 兼容垫片 ====================
     private fun setScreenCompat(screen: Screen?) {
+        val mc = minecraft ?: return
         try {
-            minecraft?.javaClass?.getMethod("setScreen", Screen::class.java)?.invoke(minecraft, screen)
+            mc.javaClass.getMethod("setScreen", Screen::class.java)?.invoke(mc, screen)
+            return
         } catch (_: NoSuchMethodException) {
-            try {
-                minecraft?.javaClass?.getMethod("displayGuiScreen", Screen::class.java)?.invoke(minecraft, screen)
-            } catch (_: Exception) { /* ignore */ }
-        } catch (_: Exception) { /* ignore */ }
+            // ignore
+        }
+        try {
+            mc.javaClass.getMethod("openScreen", Screen::class.java)?.invoke(mc, screen)
+            return
+        } catch (_: NoSuchMethodException) {
+            // ignore
+        }
+        try {
+            mc.javaClass.getMethod("displayGuiScreen", Screen::class.java)?.invoke(mc, screen)
+        } catch (_: Exception) {
+            // ignore
+        }
     }
 
     // ==================== 辅助方法 ====================
