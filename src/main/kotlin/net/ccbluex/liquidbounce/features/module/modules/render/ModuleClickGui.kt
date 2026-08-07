@@ -26,7 +26,8 @@ import org.lwjgl.glfw.GLFW
 /**
  * ClickGUI 模块 — 安卓原生版
  *
- * 直接加载纯 Kotlin 的 ClickGuiScreen，不依赖 Web/Browser 后端。
+ * 直接加载纯 Kotlin ClickGuiScreen，不依赖任何 Web/Browser 后端。
+ * 适配 PojavLauncher / RubbishBounce 安卓环境。
  */
 object ModuleClickGui :
     ClientModule("ClickGUI", ModuleCategories.RENDER, bind = GLFW.GLFW_KEY_RIGHT_SHIFT, disableActivation = true) {
@@ -34,8 +35,8 @@ object ModuleClickGui :
     override val running get() = true
 
     /**
-     * 全局按键：右 Shift 打开 ClickGUI
-     * 同时兼容 Android PojavLauncher 的 keyCode=54
+     * 全局按键监听：右 Shift (keyCode=344) 或 Android 映射 keyCode=54
+     * 仅在没有其他 Screen 打开时触发。
      */
     @Suppress("unused")
     private val keyHandler = handler<KeyboardKeyEvent> { event ->
@@ -43,30 +44,38 @@ object ModuleClickGui :
             (event.keyCode == GLFW.GLFW_KEY_RIGHT_SHIFT || event.keyCode == 54) &&
             mc.gui.screen() == null
         ) {
-            openClickGui()
+            openGui()
         }
     }
 
     override fun onEnabled() {
-        openClickGui()
+        openGui()
         super.onEnabled()
     }
 
-    // ==================== 打开 ClickGUI ====================
-
-    private fun openClickGui() {
+    /**
+     * 以多重兜底方式打开 ClickGuiScreen。
+     * Android 环境上 setScreen 方法名可能因映射不同而变化，
+     * 此处同时尝试多种调用方式确保必然生效。
+     */
+    private fun openGui() {
+        val screen = ClickGuiScreen()
         try {
-            mc.gui.setScreen(ClickGuiScreen())
+            mc.gui.setScreen(screen)
+            return
         } catch (_: NoSuchMethodError) {
-            try {
-                mc.javaClass.getMethod("setScreen", net.minecraft.client.gui.screens.Screen::class.java)
-                    ?.invoke(mc, ClickGuiScreen())
-            } catch (_: Exception) {
-                // 最后的兜底
-                mc.execute {
-                    mc.gui.setScreen(ClickGuiScreen())
-                }
-            }
+            // Fabric 不同版本可能映射名不同
+        }
+        try {
+            mc.javaClass.getMethod("setScreen", net.minecraft.client.gui.screens.Screen::class.java)
+                ?.invoke(mc, screen)
+            return
+        } catch (_: Exception) {
+            // 忽略
+        }
+        // 兜底：dispatch 到主线程
+        mc.execute {
+            mc.gui.setScreen(screen)
         }
     }
 }
