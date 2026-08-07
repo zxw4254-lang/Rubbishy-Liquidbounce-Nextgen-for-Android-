@@ -232,7 +232,7 @@ class ClickGuiScreen : Screen(Component.literal("Vape ClickGUI")) {
 
             if (isHover) fillRect(ctx, winX.toInt() + 6, yPos.toInt(), listRight.toInt(), (yPos + ITEM_H).toInt(), HOVER)
             if (isExpanded) {
-                fillRect(ctx, winX.toInt() + 6, yPos.toInt(), listRight.toInt(), (yPos + ITEM_H).toInt(), Color(0x00FF9D, 15).rgb)
+                fillRect(ctx, winX.toInt() + 6, yPos.toInt(), listRight.toInt(), (yPos + ITEM_H).toInt(), 0x0F00FF9D.toInt())
             }
 
             val nameColor = if (mod.enabled) ACCENT else TEXT_DIM
@@ -248,7 +248,7 @@ class ClickGuiScreen : Screen(Component.literal("Vape ClickGUI")) {
             if (mod.enabled) {
                 drawRoundedRect(ctx, toggleX.toFloat(), toggleY.toFloat(), toggleW.toFloat(), toggleH.toFloat(), 6f, ACCENT)
                 fillRect(ctx, toggleX + toggleW - 8, toggleY + 2, toggleX + toggleW - 2, toggleY + toggleH - 2, TEXT_BRIGHT)
-                fillRect(ctx, toggleX + toggleW - 8, toggleY + 2, toggleX + toggleW - 2, toggleY + toggleH - 2, Color(0x00FF9D, 40).rgb)
+                fillRect(ctx, toggleX + toggleW - 8, toggleY + 2, toggleX + toggleW - 2, toggleY + toggleH - 2, 0x2800FF9D.toInt())
             } else {
                 drawRoundedRect(ctx, toggleX.toFloat(), toggleY.toFloat(), toggleW.toFloat(), toggleH.toFloat(), 6f, 0x30FFFFFF.toInt())
                 fillRect(ctx, toggleX + 2, toggleY + 2, toggleX + 8, toggleY + toggleH - 2, 0xAA808080.toInt())
