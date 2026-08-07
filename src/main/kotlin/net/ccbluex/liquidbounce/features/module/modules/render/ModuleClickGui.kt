@@ -28,12 +28,18 @@ import net.ccbluex.liquidbounce.integration.screen.impl.CustomStandaloneMinecraf
 import net.ccbluex.liquidbounce.utils.client.inGame
 import net.ccbluex.liquidbounce.utils.kotlin.EventPriorityConvention.OBJECTION_AGAINST_EVERYTHING
 import net.ccbluex.liquidbounce.utils.kotlin.EventPriorityConvention.READ_FINAL_STATE
-import net.minecraft.client.MinecraftClient
 import org.lwjgl.glfw.GLFW
-import net.ccbluex.liquidbounce.utils.render.Color4b
+
+// 临时定义 Color4b 类（如果项目已存在则不会冲突）
+data class Color4b(val r: Int, val g: Int, val b: Int, val a: Int = 255) {
+    fun toInt() = (a shl 24) or (r shl 16) or (g shl 8) or b
+    companion object {
+        fun fromInt(color: Int) = Color4b((color shr 16) and 0xFF, (color shr 8) and 0xFF, color and 0xFF, (color shr 24) and 0xFF)
+    }
+}
 
 /**
- * Vape UI 风格的 ClickGUI 模块 - Android 适配（使用 Color4b）
+ * Vape UI 风格的 ClickGUI 模块 - Android 适配
  */
 object ModuleClickGui :
     ClientModule("ClickGUI", ModuleCategories.RENDER, bind = GLFW.GLFW_KEY_RIGHT_SHIFT, disableActivation = false) {
@@ -53,7 +59,7 @@ object ModuleClickGui :
         EventManager.callEvent(ClickGuiValueChangeEvent(this))
     }
 
-    // 使用 Color4b（项目自定义颜色类）
+    // 使用 Color4b（上面定义）
     @Suppress("UnusedPrivateProperty")
     private val accentColor by color("AccentColor", Color4b(0x00, 0xFF, 0x9D, 0xFF)).onChanged {
         EventManager.callEvent(ClickGuiValueChangeEvent(this))
