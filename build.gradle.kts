@@ -88,13 +88,12 @@ allprojects {
 
 loom {
     accessWidenerPath = file("src/main/resources/liquidbounce.accesswidener")
+    setMappings(loom.officialMojangMappings())
 }
 
 dependencies {
     // Minecraft
     minecraft(libs.minecraft)
-
-    add("mappings", "net.fabricmc:mojang:${project.property("mod_mc_version")}")
     
     // Fabric
     api(libs.fabric.loader)
