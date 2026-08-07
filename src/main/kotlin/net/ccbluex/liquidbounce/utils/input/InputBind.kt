@@ -28,7 +28,6 @@ import net.ccbluex.liquidbounce.config.types.list.Tagged
 import net.ccbluex.liquidbounce.config.types.list.Tagged.Companion.makeLookupTable
 import net.ccbluex.liquidbounce.event.events.KeyboardKeyEvent
 import net.ccbluex.liquidbounce.event.events.MouseButtonEvent
-import net.ccbluex.liquidbounce.utils.client.PlatformUtils
 import net.ccbluex.liquidbounce.utils.text.asPlainText
 import net.ccbluex.liquidbounce.utils.client.bold
 import net.ccbluex.liquidbounce.utils.client.copyable
@@ -249,28 +248,32 @@ data class InputBind(
 
         /**
          * Performs the platform (OS) specified render name of a modifier.
+         * Android 环境下返回简化文本，避免特殊符号不兼容。
          */
-        val platformRenderName: String get() = when {
-            // Android 或 Pojav 环境：使用简化文本（触屏友好）
-            PlatformUtils.IS_ANDROID || PlatformUtils.IS_POJAV -> when (this) {
-                SHIFT -> "Shift"
-                CONTROL -> "Ctrl"
-                ALT -> "Alt"
-                SUPER -> "Super"
-            }
-            Util.getPlatform() == Util.OS.WINDOWS -> when (this) {
-                CONTROL -> "Ctrl"
-                SUPER -> "\u229e"
+        val platformRenderName: String get() {
+            // 检测是否为 Android 环境（无 PlatformUtils 依赖）
+            val isAndroid = System.getProperty("java.vendor")?.contains("Android") == true ||
+                    System.getProperty("os.name")?.lowercase()?.contains("android") == true
+            return when {
+                isAndroid -> when (this) {
+                    SHIFT -> "Shift"
+                    CONTROL -> "Ctrl"
+                    ALT -> "Alt"
+                    SUPER -> "Super"
+                }
+                Util.getPlatform() == Util.OS.WINDOWS -> when (this) {
+                    CONTROL -> "Ctrl"
+                    SUPER -> "\u229e"
+                    else -> tag
+                }
+                Util.getPlatform() == Util.OS.OSX -> when (this) {
+                    SHIFT -> "\u21e7"
+                    CONTROL -> "^"
+                    ALT -> "\u2325"
+                    SUPER -> "\u2318"
+                }
                 else -> tag
             }
-            Util.getPlatform() == Util.OS.OSX -> when (this) {
-                SHIFT -> "\u21e7"
-                CONTROL -> "^"
-                ALT -> "\u2325"
-                SUPER -> "\u2318"
-                // else -> choiceName
-            }
-            else -> tag
         }
 
         companion object {
