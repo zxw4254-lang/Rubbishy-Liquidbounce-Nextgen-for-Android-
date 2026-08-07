@@ -18,212 +18,137 @@
  */
 package net.ccbluex.liquidbounce.features.module.modules.render
 
-import net.ccbluex.liquidbounce.additions.screenInitialized
-import net.ccbluex.liquidbounce.additions.setPosition
 import net.ccbluex.liquidbounce.config.types.nesting.ToggleableConfigurable
 import net.ccbluex.liquidbounce.event.EventManager
-import net.ccbluex.liquidbounce.event.events.BrowserReadyEvent
 import net.ccbluex.liquidbounce.event.events.ClickGuiScaleChangeEvent
 import net.ccbluex.liquidbounce.event.events.ClickGuiValueChangeEvent
-import net.ccbluex.liquidbounce.event.events.ClientLanguageChangedEvent
-import net.ccbluex.liquidbounce.event.events.GameRenderEvent
-import net.ccbluex.liquidbounce.event.events.WorldChangeEvent
-import net.ccbluex.liquidbounce.event.handler
-import net.ccbluex.liquidbounce.event.sequenceHandler
-import net.ccbluex.liquidbounce.event.waitSeconds
 import net.ccbluex.liquidbounce.features.module.ClientModule
 import net.ccbluex.liquidbounce.features.module.ModuleCategories
-import net.ccbluex.liquidbounce.integration.IntegrationListener
-import net.ccbluex.liquidbounce.integration.VirtualDisplayScreen
-import net.ccbluex.liquidbounce.integration.VirtualScreenType
-import net.ccbluex.liquidbounce.integration.backend.browser.Browser
-import net.ccbluex.liquidbounce.integration.interop.protocol.rest.v1.game.isTyping
-import net.ccbluex.liquidbounce.integration.theme.ThemeManager
-import net.ccbluex.liquidbounce.utils.client.asPlainText
-import net.ccbluex.liquidbounce.utils.client.inGame
-import net.ccbluex.liquidbounce.utils.kotlin.EventPriorityConvention.OBJECTION_AGAINST_EVERYTHING
-import net.ccbluex.liquidbounce.utils.kotlin.EventPriorityConvention.READ_FINAL_STATE
 import net.minecraft.client.gui.screens.Screen
+import net.minecraft.network.chat.Component
 import org.lwjgl.glfw.GLFW
 
 /**
- * ClickGUI module
- *
+ * ClickGUI module - Simplified for 26.2 compatibility
  * Shows you an easy-to-use menu to toggle and configure modules.
  */
-
 object ModuleClickGui :
     ClientModule("ClickGUI", ModuleCategories.RENDER, bind = GLFW.GLFW_KEY_RIGHT_SHIFT, disableActivation = true) {
 
     override val running get() = true
 
+    // 基础缩放设置
     @Suppress("UnusedPrivateProperty")
     private val scale by float("Scale", 1f, 0.5f..2f).onChanged {
         EventManager.callEvent(ClickGuiScaleChangeEvent(it))
         EventManager.callEvent(ClickGuiValueChangeEvent(this))
     }
 
-    @Suppress("UnusedPrivateProperty")
-    private val cache by boolean("Cache", true).onChanged { cache ->
-        mc.execute {
-            mouseX = Double.NaN
-            mouseY = Double.NaN
-            if (cache) {
-                open()
-            } else {
-                close()
-            }
-
-            if (mc.screen is VirtualDisplayScreen || mc.screen is ClickScreen) {
-                onEnabled()
-            }
-        }
-    }
-
-    private val trackMousePosition by boolean("TrackMousePosition", false)
-
+    // 搜索框自动聚焦
     @Suppress("UnusedPrivateProperty")
     private val searchBarAutoFocus by boolean("SearchBarAutoFocus", true).onChanged {
         EventManager.callEvent(ClickGuiValueChangeEvent(this))
     }
 
-    val isInSearchBar: Boolean
-        get() = (mc.screen is VirtualDisplayScreen || mc.screen is ClickScreen) && isTyping
-
-    object Snapping : ToggleableConfigurable(this, "Snapping", true) {
-
+    // Snapping 配置
+    object Snapping : ToggleableConfigurable(ModuleClickGui, "Snapping", true) {
         @Suppress("UnusedPrivateProperty")
         private val gridSize by int("GridSize", 10, 1..100, "px").onChanged {
             EventManager.callEvent(ClickGuiValueChangeEvent(ModuleClickGui))
         }
 
         init {
+            // 监听启用状态变化
             inner.find { it.name == "Enabled" }?.onChanged {
                 EventManager.callEvent(ClickGuiValueChangeEvent(ModuleClickGui))
             }
         }
     }
 
-    private var clickGuiBrowser: Browser? = null
-    private const val WORLD_CHANGE_SECONDS_UNTIL_RELOAD = 5
-
     init {
         tree(Snapping)
     }
 
-    override fun onEnabled() {
-        // Pretty sure we are not in a game, so we can't open the clickgui
-        if (!inGame) {
-            return
-        }
-
-        // For MinecraftGuiBrowserBackend (Android/PojavBounce), use native ClickGUI directly
-        if (net.ccbluex.liquidbounce.integration.backend.BrowserBackendManager.browserBackend is net.ccbluex.liquidbounce.integration.backend.backends.minecraftgui.MinecraftGuiBrowserBackend) {
-            mc.setScreen(net.ccbluex.liquidbounce.integration.ui.clickgui.NativeClickGuiScreen())
-            super.onEnabled()
-            return
-        }
-
-        mc.setScreen(
-            if (clickGuiBrowser == null) {
-                VirtualDisplayScreen(VirtualScreenType.CLICK_GUI)
-            } else {
-                ClickScreen()
-            }
-        )
-        super.onEnabled()
+    override fun onEnable() {
+        // 直接打开 ClickGUI 屏幕
+        mc.setScreen(ClickScreen())
+        super.onEnable()
     }
 
-    private fun open() {
-        if (clickGuiBrowser != null) {
-            return
+    override fun onDisable() {
+        // 关闭 ClickGUI 屏幕
+        if (mc.screen is ClickScreen) {
+            mc.setScreen(null)
         }
-
-        clickGuiBrowser = ThemeManager.openInputAwareImmediate(
-            VirtualScreenType.CLICK_GUI,
-            true,
-            priority = 20,
-            settings = IntegrationListener.browserSettings
-        ) {
-            mc.screen is ClickScreen
-        }
+        super.onDisable()
     }
-
-    private fun close() {
-        clickGuiBrowser?.let {
-            it.close()
-            clickGuiBrowser = null
-        }
-    }
-
-    fun reload(restart: Boolean = false) {
-        if (restart) {
-            close()
-            open()
-            return
-        }
-
-        clickGuiBrowser?.reload()
-    }
-
-    @Suppress("unused")
-    private val gameRenderHandler = handler<GameRenderEvent>(priority = OBJECTION_AGAINST_EVERYTHING) {
-        clickGuiBrowser?.visible = mc.screen is ClickScreen
-    }
-
-    @Suppress("unused")
-    private val browserReadyHandler = handler<BrowserReadyEvent>(priority = READ_FINAL_STATE) {
-        tree(IntegrationListener.browserSettings)
-        open()
-    }
-
-    @Suppress("unused")
-    private val worldChangeHandler = sequenceHandler<WorldChangeEvent>(
-        priority = OBJECTION_AGAINST_EVERYTHING
-    ) { event ->
-        if (event.world == null) {
-            return@sequenceHandler
-        }
-
-        waitSeconds(WORLD_CHANGE_SECONDS_UNTIL_RELOAD)
-        if (mc.screen !is ClickScreen) {
-            reload()
-        }
-    }
-
-    @Suppress("unused")
-    private val clientLanguageChangedHandler = handler<ClientLanguageChangedEvent> {
-        if (mc.screen !is ClickScreen) {
-            reload()
-        }
-    }
-
-    private var mouseX = Double.NaN
-    private var mouseY = Double.NaN
 
     /**
-     * An empty screen that acts as a hint when to draw the clickgui
+     * ClickGUI 屏幕 - 半透明风格
      */
-    class ClickScreen : Screen("ClickGUI".asPlainText()) {
+    class ClickScreen : Screen(Component.literal("ClickGUI")) {
 
-        override fun init() {
-            if (trackMousePosition && !screenInitialized && !mouseX.isNaN() && !mouseY.isNaN()) {
-                mc.mouseHandler.setPosition(mouseX, mouseY)
-            }
-            super.init()
+        // 窗口不透明度 (0.0 - 1.0)
+        private var windowOpacity = 0.85f
+
+        init {
+            // 设置半透明背景
         }
 
-        override fun onClose() {
-            mouseX = mc.mouseHandler.xpos()
-            mouseY = mc.mouseHandler.ypos()
-            mc.mouseHandler.grabMouse()
-            super.onClose()
+        override fun render(poseStack: com.mojang.blaze3d.vertex.PoseStack, mouseX: Int, mouseY: Int, delta: Float) {
+            // 绘制半透明背景
+            val width = this.width
+            val height = this.height
+            val alpha = (windowOpacity * 255).toInt()
+
+            // 使用 Gui.fill 绘制半透明黑色背景
+            net.minecraft.client.gui.Gui.fill(
+                poseStack,
+                0, 0, width, height,
+                (alpha shl 24) or 0x000000
+            )
+
+            // 绘制标题
+            val font = minecraft!!.font
+            font.draw(
+                poseStack,
+                Component.literal("§lClickGUI §7(半透明模式)"),
+                20f, 20f,
+                0xFFFFFF
+            )
+
+            // 绘制提示信息
+            font.draw(
+                poseStack,
+                Component.literal("§7按 ESC 关闭"),
+                20f, 45f,
+                0xAAAAAA
+            )
+
+            // TODO: 在此处添加你实际的 ClickGUI 渲染逻辑
+            // 由于 26.2 版本使用浏览器渲染，这里只提供占位界面
+            // 你可以将你之前的 ClickGuiScreen 渲染逻辑迁移到这里
+        }
+
+        override fun renderBackground(poseStack: com.mojang.blaze3d.vertex.PoseStack) {
+            // 空实现，由 render 方法绘制背景
         }
 
         override fun isPauseScreen(): Boolean {
-            // preventing game pause
+            // 防止游戏暂停
             return false
         }
-    }
 
-}
+        override fun shouldCloseOnEsc(): Boolean {
+            return true
+        }
+
+        override fun onClose() {
+            // 关闭时禁用模块
+            if (ModuleClickGui.enabled) {
+                ModuleClickGui.toggle()
+            }
+            super.onClose()
+        }
+    }
+    }
