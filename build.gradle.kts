@@ -19,11 +19,11 @@
 
 import com.github.gradle.node.npm.task.NpmTask
 import dev.detekt.gradle.DetektCreateBaselineTask
+import net.fabricmc.loom.api.LoomExtension
 import groovy.json.JsonOutput
 import org.gradle.api.tasks.PathSensitivity
 import org.gradle.jvm.tasks.Jar
 import org.gradle.kotlin.dsl.support.listFilesOrdered
-import net.fabricmc.loom.api.LoomExtension
 
 plugins {
     alias(libs.plugins.fabric.loom)
@@ -85,10 +85,6 @@ allprojects {
             url = uri("https://maven.shedaniel.me/")
         }
     }
-}
-
-loom {
-    accessWidenerPath = file("src/main/resources/liquidbounce.accesswidener")
 }
 
 loom {
