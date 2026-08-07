@@ -1,46 +1,61 @@
 /*
  * This file is part of LiquidBounce (https://github.com/CCBlueX/LiquidBounce)
- * 魔改版本 - Vape UI 风格 - Android 兼容版
+ *
+ * Copyright (c) 2015 - 2026 CCBlueX
+ *
+ * LiquidBounce is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * LiquidBounce is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with LiquidBounce. If not, see <https://www.gnu.org/licenses/>.
  */
-
 package net.ccbluex.liquidbounce.features.module.modules.render
 
-import net.ccbluex.liquidbounce.LiquidBounce
-import net.ccbluex.liquidbounce.config.types.group.ToggleableValueGroup
+import net.ccbluex.liquidbounce.additions.screenInitialized
+import net.ccbluex.liquidbounce.additions.setPosition
+import net.ccbluex.liquidbounce.config.types.nesting.ToggleableConfigurable
 import net.ccbluex.liquidbounce.event.EventManager
 import net.ccbluex.liquidbounce.event.events.BrowserReadyEvent
 import net.ccbluex.liquidbounce.event.events.ClickGuiScaleChangeEvent
 import net.ccbluex.liquidbounce.event.events.ClickGuiValueChangeEvent
-import net.ccbluex.liquidbounce.event.events.DisconnectEvent
-import net.ccbluex.liquidbounce.event.events.GameTickEvent
+import net.ccbluex.liquidbounce.event.events.ClientLanguageChangedEvent
+import net.ccbluex.liquidbounce.event.events.GameRenderEvent
 import net.ccbluex.liquidbounce.event.events.WorldChangeEvent
-import net.ccbluex.liquidbounce.event.events.KeyboardKeyEvent
 import net.ccbluex.liquidbounce.event.handler
 import net.ccbluex.liquidbounce.event.sequenceHandler
 import net.ccbluex.liquidbounce.event.waitSeconds
 import net.ccbluex.liquidbounce.features.module.ClientModule
 import net.ccbluex.liquidbounce.features.module.ModuleCategories
+import net.ccbluex.liquidbounce.integration.IntegrationListener
+import net.ccbluex.liquidbounce.integration.VirtualDisplayScreen
+import net.ccbluex.liquidbounce.integration.VirtualScreenType
+import net.ccbluex.liquidbounce.integration.backend.browser.Browser
 import net.ccbluex.liquidbounce.integration.interop.protocol.rest.v1.game.isTyping
-import net.ccbluex.liquidbounce.integration.screen.CustomScreenType
-import net.ccbluex.liquidbounce.integration.screen.ScreenManager
-import net.ccbluex.liquidbounce.integration.screen.impl.CustomSharedMinecraftScreen
-import net.ccbluex.liquidbounce.integration.screen.impl.CustomStandaloneMinecraftScreen
+import net.ccbluex.liquidbounce.integration.theme.ThemeManager
+import net.ccbluex.liquidbounce.utils.client.asPlainText
 import net.ccbluex.liquidbounce.utils.client.inGame
 import net.ccbluex.liquidbounce.utils.kotlin.EventPriorityConvention.OBJECTION_AGAINST_EVERYTHING
 import net.ccbluex.liquidbounce.utils.kotlin.EventPriorityConvention.READ_FINAL_STATE
-import net.ccbluex.liquidbounce.render.engine.type.Color4b
 import net.minecraft.client.gui.screens.Screen
 import org.lwjgl.glfw.GLFW
 
 /**
- * Vape UI 风格的 ClickGUI 模块 - Android 适配
+ * ClickGUI module
+ *
+ * Shows you an easy-to-use menu to toggle and configure modules.
  */
+
 object ModuleClickGui :
-    ClientModule("ClickGUI", ModuleCategories.RENDER, bind = GLFW.GLFW_KEY_RIGHT_SHIFT, disableActivation = false) {
+    ClientModule("ClickGUI", ModuleCategories.RENDER, bind = GLFW.GLFW_KEY_RIGHT_SHIFT, disableActivation = true) {
 
     override val running get() = true
-
-    // ==================== Vape UI 配置参数 ====================
 
     @Suppress("UnusedPrivateProperty")
     private val scale by float("Scale", 1f, 0.5f..2f).onChanged {
@@ -48,106 +63,36 @@ object ModuleClickGui :
         EventManager.callEvent(ClickGuiValueChangeEvent(this))
     }
 
-    @Suppress("UnusedPrivateProperty", "unused")
+    @Suppress("UnusedPrivateProperty")
+    private val cache by boolean("Cache", true).onChanged { cache ->
+        mc.execute {
+            mouseX = Double.NaN
+            mouseY = Double.NaN
+            if (cache) {
+                open()
+            } else {
+                close()
+            }
+
+            if (mc.screen is VirtualDisplayScreen || mc.screen is ClickScreen) {
+                onEnabled()
+            }
+        }
+    }
+
+    private val trackMousePosition by boolean("TrackMousePosition", false)
+
+    @Suppress("UnusedPrivateProperty")
     private val searchBarAutoFocus by boolean("SearchBarAutoFocus", true).onChanged {
         EventManager.callEvent(ClickGuiValueChangeEvent(this))
     }
 
-    @Suppress("UnusedPrivateProperty")
-    private val accentColor by color("AccentColor", Color4b(0x00, 0xFF, 0x9D, 0xFF)).onChanged {
-        EventManager.callEvent(ClickGuiValueChangeEvent(this))
-    }
+    val isInSearchBar: Boolean
+        get() = (mc.screen is VirtualDisplayScreen || mc.screen is ClickScreen) && isTyping
 
-    @Suppress("UnusedPrivateProperty")
-    private val backgroundColor by color("BackgroundColor", Color4b(0x0A, 0x0A, 0x0A, 0xE8)).onChanged {
-        EventManager.callEvent(ClickGuiValueChangeEvent(this))
-    }
-
-    @Suppress("UnusedPrivateProperty")
-    private val windowOpacity by float("WindowOpacity", 0.92f, 0.5f..1.0f).onChanged {
-        EventManager.callEvent(ClickGuiValueChangeEvent(this))
-    }
-
-    // Vape UI 窗口配置
-    object VapeWindow : ToggleableValueGroup(this, "VapeWindow", true) {
-        @Suppress("UnusedPrivateProperty")
-        private val windowWidth by int("Width", 380, 200..600, "px").onChanged {
-            EventManager.callEvent(ClickGuiValueChangeEvent(ModuleClickGui))
-        }
+    object Snapping : ToggleableConfigurable(this, "Snapping", true) {
 
         @Suppress("UnusedPrivateProperty")
-        private val windowHeight by int("Height", 280, 150..500, "px").onChanged {
-            EventManager.callEvent(ClickGuiValueChangeEvent(ModuleClickGui))
-        }
-
-        @Suppress("UnusedPrivateProperty")
-        private val roundedCorners by boolean("RoundedCorners", true).onChanged {
-            EventManager.callEvent(ClickGuiValueChangeEvent(ModuleClickGui))
-        }
-
-        @Suppress("UnusedPrivateProperty")
-        private val cornerRadius by int("CornerRadius", 12, 4..24, "px").onChanged {
-            EventManager.callEvent(ClickGuiValueChangeEvent(ModuleClickGui))
-        }
-
-        @Suppress("UnusedPrivateProperty")
-        private val shadowIntensity by float("ShadowIntensity", 0.6f, 0.0f..1.0f).onChanged {
-            EventManager.callEvent(ClickGuiValueChangeEvent(ModuleClickGui))
-        }
-
-        init {
-            inner.find { it.name == "Enabled" }?.onChanged {
-                EventManager.callEvent(ClickGuiValueChangeEvent(ModuleClickGui))
-            }
-        }
-    }
-
-    // Vape UI 搜索栏配置
-    object SearchBar : ToggleableValueGroup(this, "SearchBar", true) {
-        @Suppress("UnusedPrivateProperty")
-        private val placeholderText by text("Placeholder", "搜索功能...").onChanged {
-            EventManager.callEvent(ClickGuiValueChangeEvent(ModuleClickGui))
-        }
-
-        @Suppress("UnusedPrivateProperty")
-        private val autoFocus by boolean("AutoFocus", true).onChanged {
-            EventManager.callEvent(ClickGuiValueChangeEvent(ModuleClickGui))
-        }
-
-        init {
-            inner.find { it.name == "Enabled" }?.onChanged {
-                EventManager.callEvent(ClickGuiValueChangeEvent(ModuleClickGui))
-            }
-        }
-    }
-
-    // Vape UI 模块列表配置
-    object ModuleList : ToggleableValueGroup(this, "ModuleList", true) {
-        @Suppress("UnusedPrivateProperty")
-        private val itemHeight by int("ItemHeight", 24, 16..40, "px").onChanged {
-            EventManager.callEvent(ClickGuiValueChangeEvent(ModuleClickGui))
-        }
-
-        @Suppress("UnusedPrivateProperty")
-        private val showStatus by boolean("ShowStatus", true).onChanged {
-            EventManager.callEvent(ClickGuiValueChangeEvent(ModuleClickGui))
-        }
-
-        @Suppress("UnusedPrivateProperty")
-        private val animationSpeed by float("AnimationSpeed", 0.3f, 0.05f..1.0f).onChanged {
-            EventManager.callEvent(ClickGuiValueChangeEvent(ModuleClickGui))
-        }
-
-        init {
-            inner.find { it.name == "Enabled" }?.onChanged {
-                EventManager.callEvent(ClickGuiValueChangeEvent(ModuleClickGui))
-            }
-        }
-    }
-
-    // 保留原 Snapping 配置
-    object Snapping : ToggleableValueGroup(this, "Snapping", true) {
-        @Suppress("UnusedPrivateProperty", "unused")
         private val gridSize by int("GridSize", 10, 1..100, "px").onChanged {
             EventManager.callEvent(ClickGuiValueChangeEvent(ModuleClickGui))
         }
@@ -159,141 +104,126 @@ object ModuleClickGui :
         }
     }
 
+    private var clickGuiBrowser: Browser? = null
+    private const val WORLD_CHANGE_SECONDS_UNTIL_RELOAD = 5
+
     init {
-        tree(VapeWindow)
-        tree(SearchBar)
-        tree(ModuleList)
         tree(Snapping)
     }
 
-    // 兼容性访问器：获取当前屏幕（反射）
-    private fun getScreenCompat(): Screen? {
-        val client = mc
-        try {
-            client.javaClass.getMethod("getScreen")?.invoke(client)?.let { return it as? Screen }
-        } catch (_: Exception) {}
-        try {
-            val f = client.javaClass.getDeclaredField("screen")
-            f.isAccessible = true
-            return f.get(client) as? Screen
-        } catch (_: Exception) {}
-        try {
-            val f = client.javaClass.getDeclaredField("currentScreen")
-            f.isAccessible = true
-            return f.get(client) as? Screen
-        } catch (_: Exception) {}
-        try {
-            val f = client.javaClass.getDeclaredField("field_71462_r")
-            f.isAccessible = true
-            return f.get(client) as? Screen
-        } catch (_: Exception) {}
-        return null
-    }
-
-    val isInSearchBar: Boolean
-        get() {
-            if (!isTyping) return false
-            val screen = getScreenCompat() ?: return false
-            return screen is CustomSharedMinecraftScreen && screen.screenType == CustomScreenType.CLICK_GUI ||
-                screen is CustomStandaloneMinecraftScreen && screen.screenType == CustomScreenType.CLICK_GUI
+    override fun onEnabled() {
+        // Pretty sure we are not in a game, so we can't open the clickgui
+        if (!inGame) {
+            return
         }
 
-    @Suppress("UnusedPrivateProperty")
-    private val useStandaloneScreen by boolean("Cache", true).onChanged {
-        mc.execute(::onEnabled)
+        // For MinecraftGuiBrowserBackend (Android/PojavBounce), use native ClickGUI directly
+        if (net.ccbluex.liquidbounce.integration.backend.BrowserBackendManager.browserBackend is net.ccbluex.liquidbounce.integration.backend.backends.minecraftgui.MinecraftGuiBrowserBackend) {
+            mc.setScreen(net.ccbluex.liquidbounce.integration.ui.clickgui.NativeClickGuiScreen())
+            super.onEnabled()
+            return
+        }
+
+        mc.setScreen(
+            if (clickGuiBrowser == null) {
+                VirtualDisplayScreen(VirtualScreenType.CLICK_GUI)
+            } else {
+                ClickScreen()
+            }
+        )
+        super.onEnabled()
     }
 
-    private var standaloneScreen: CustomStandaloneMinecraftScreen? = null
+    private fun open() {
+        if (clickGuiBrowser != null) {
+            return
+        }
+
+        clickGuiBrowser = ThemeManager.openInputAwareImmediate(
+            VirtualScreenType.CLICK_GUI,
+            true,
+            priority = 20,
+            settings = IntegrationListener.browserSettings
+        ) {
+            mc.screen is ClickScreen
+        }
+    }
+
+    private fun close() {
+        clickGuiBrowser?.let {
+            it.close()
+            clickGuiBrowser = null
+        }
+    }
+
+    fun reload(restart: Boolean = false) {
+        if (restart) {
+            close()
+            open()
+            return
+        }
+
+        clickGuiBrowser?.reload()
+    }
+
+    @Suppress("unused")
+    private val gameRenderHandler = handler<GameRenderEvent>(priority = OBJECTION_AGAINST_EVERYTHING) {
+        clickGuiBrowser?.visible = mc.screen is ClickScreen
+    }
 
     @Suppress("unused")
     private val browserReadyHandler = handler<BrowserReadyEvent>(priority = READ_FINAL_STATE) {
-        tree(ScreenManager.browserSettings)
-    }
-
-    private val keyHandler = handler<KeyboardKeyEvent> { event ->
-        if (event.action == 1 && (event.keyCode == GLFW.GLFW_KEY_RIGHT_SHIFT || event.keyCode == 54) && getScreenCompat() == null) {
-            setScreenCompat(ClickGuiScreen())
-        }
-    }
-
-    override fun onEnabled() {
-        if (!LiquidBounce.isInitialized) return
-        setScreenCompat(ClickGuiScreen())
-        super.onEnabled()
+        tree(IntegrationListener.browserSettings)
+        open()
     }
 
     @Suppress("unused")
     private val worldChangeHandler = sequenceHandler<WorldChangeEvent>(
         priority = OBJECTION_AGAINST_EVERYTHING
     ) { event ->
-        if (event.world == null || !useStandaloneScreen) return@sequenceHandler
-        waitSeconds(1)
-        if (updateStandaloneScreen()) {
-            standaloneScreen?.sync()
+        if (event.world == null) {
+            return@sequenceHandler
+        }
+
+        waitSeconds(WORLD_CHANGE_SECONDS_UNTIL_RELOAD)
+        if (mc.screen !is ClickScreen) {
+            reload()
         }
     }
 
     @Suppress("unused")
-    private val disconnectHandler = handler<DisconnectEvent> {
-        standaloneScreen?.close()
-        standaloneScreen = null
+    private val clientLanguageChangedHandler = handler<ClientLanguageChangedEvent> {
+        if (mc.screen !is ClickScreen) {
+            reload()
+        }
     }
 
-    @Suppress("unused")
-    private val tickHandler = handler<GameTickEvent> {
-        standaloneScreen?.browser?.visible = getScreenCompat() == standaloneScreen
-    }
+    private var mouseX = Double.NaN
+    private var mouseY = Double.NaN
 
-    fun updateStandaloneScreen(): Boolean {
-        if (useStandaloneScreen) {
-            if (standaloneScreen == null) {
-                standaloneScreen = CustomStandaloneMinecraftScreen(CustomScreenType.CLICK_GUI)
-            } else {
-                return true
+    /**
+     * An empty screen that acts as a hint when to draw the clickgui
+     */
+    class ClickScreen : Screen("ClickGUI".asPlainText()) {
+
+        override fun init() {
+            if (trackMousePosition && !screenInitialized && !mouseX.isNaN() && !mouseY.isNaN()) {
+                mc.mouseHandler.setPosition(mouseX, mouseY)
             }
-        } else if (standaloneScreen != null) {
-            standaloneScreen?.close()
-            standaloneScreen = null
+            super.init()
         }
-        return false
-    }
 
-    fun sync() {
-        if (!LiquidBounce.isInitialized) return
-        standaloneScreen?.sync()
-    }
+        override fun onClose() {
+            mouseX = mc.mouseHandler.xpos()
+            mouseY = mc.mouseHandler.ypos()
+            mc.mouseHandler.grabMouse()
+            super.onClose()
+        }
 
-    fun invalidate() {
-        val standaloneScreen = standaloneScreen ?: return
-        val wasOpen = getScreenCompat() == standaloneScreen
-        if (wasOpen) setScreenCompat(null)
-        standaloneScreen.close()
-        this.standaloneScreen = null
-        if (wasOpen) {
-            updateStandaloneScreen()
-            setScreenCompat(this.standaloneScreen ?: ClickGuiScreen())
+        override fun isPauseScreen(): Boolean {
+            // preventing game pause
+            return false
         }
     }
 
-    // ==================== setScreen 兼容垫片 ====================
-    private fun setScreenCompat(screen: Screen?) {
-        val client = mc
-        try {
-            client.javaClass.getMethod("setScreen", Screen::class.java)?.invoke(client, screen)
-            return
-        } catch (_: NoSuchMethodException) {
-            // ignore
-        }
-        try {
-            client.javaClass.getMethod("openScreen", Screen::class.java)?.invoke(client, screen)
-            return
-        } catch (_: NoSuchMethodException) {
-            // ignore
-        }
-        try {
-            client.javaClass.getMethod("displayGuiScreen", Screen::class.java)?.invoke(client, screen)
-        } catch (_: Exception) {
-            // ignore
-        }
-    }
 }
