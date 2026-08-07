@@ -166,10 +166,34 @@ object ModuleClickGui :
         tree(Snapping)
     }
 
+    // 兼容性访问器：获取当前屏幕（反射）
+    private fun getScreenCompat(): Screen? {
+        val client = mc
+        try {
+            client.javaClass.getMethod("getScreen")?.invoke(client)?.let { return it as? Screen }
+        } catch (_: Exception) {}
+        try {
+            val f = client.javaClass.getDeclaredField("screen")
+            f.isAccessible = true
+            return f.get(client) as? Screen
+        } catch (_: Exception) {}
+        try {
+            val f = client.javaClass.getDeclaredField("currentScreen")
+            f.isAccessible = true
+            return f.get(client) as? Screen
+        } catch (_: Exception) {}
+        try {
+            val f = client.javaClass.getDeclaredField("field_71462_r")
+            f.isAccessible = true
+            return f.get(client) as? Screen
+        } catch (_: Exception) {}
+        return null
+    }
+
     val isInSearchBar: Boolean
         get() {
             if (!isTyping) return false
-            val screen = mc.screen ?: return false
+            val screen = getScreenCompat() ?: return false
             return screen is CustomSharedMinecraftScreen && screen.screenType == CustomScreenType.CLICK_GUI ||
                 screen is CustomStandaloneMinecraftScreen && screen.screenType == CustomScreenType.CLICK_GUI
         }
@@ -187,7 +211,7 @@ object ModuleClickGui :
     }
 
     private val keyHandler = handler<KeyboardKeyEvent> { event ->
-        if (event.action == 1 && (event.keyCode == GLFW.GLFW_KEY_RIGHT_SHIFT || event.keyCode == 54) && mc.screen == null) {
+        if (event.action == 1 && (event.keyCode == GLFW.GLFW_KEY_RIGHT_SHIFT || event.keyCode == 54) && getScreenCompat() == null) {
             setScreenCompat(ClickGuiScreen())
         }
     }
@@ -217,7 +241,7 @@ object ModuleClickGui :
 
     @Suppress("unused")
     private val tickHandler = handler<GameTickEvent> {
-        standaloneScreen?.browser?.visible = mc.screen == standaloneScreen
+        standaloneScreen?.browser?.visible = getScreenCompat() == standaloneScreen
     }
 
     fun updateStandaloneScreen(): Boolean {
@@ -241,7 +265,7 @@ object ModuleClickGui :
 
     fun invalidate() {
         val standaloneScreen = standaloneScreen ?: return
-        val wasOpen = mc.screen == standaloneScreen
+        val wasOpen = getScreenCompat() == standaloneScreen
         if (wasOpen) setScreenCompat(null)
         standaloneScreen.close()
         this.standaloneScreen = null
@@ -251,7 +275,7 @@ object ModuleClickGui :
         }
     }
 
-    // ==================== setScreen 兼容垫片（不依赖 MinecraftClient 类） ====================
+    // ==================== setScreen 兼容垫片 ====================
     private fun setScreenCompat(screen: Screen?) {
         val client = mc
         try {

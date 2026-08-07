@@ -10,7 +10,7 @@ import net.minecraft.client.gui.Font
 import net.minecraft.client.input.MouseButtonEvent
 import net.minecraft.client.input.KeyEvent
 import net.minecraft.client.input.CharacterEvent
-import net.minecraft.util.math.MatrixStack
+import com.mojang.blaze3d.vertex.PoseStack
 import net.minecraft.network.chat.Component
 import org.lwjgl.glfw.GLFW
 import java.awt.Color
@@ -66,58 +66,30 @@ class ClickGuiScreen : Screen(Component.literal("Vape ClickGUI")) {
     override fun isPauseScreen() = false
     override fun shouldCloseOnEsc() = true
 
-    // ==================== 绘制工具 ====================
+    // ==================== 绘制工具（使用 DrawableHelper.fill） ====================
 
-    private fun fillRect(matrices: MatrixStack, x1: Int, y1: Int, x2: Int, y2: Int, color: Int) {
+    private fun fillRect(matrices: PoseStack, x1: Int, y1: Int, x2: Int, y2: Int, color: Int) {
         if (x2 <= x1 || y2 <= y1) return
-        val matrix = matrices.last().pose
-        val tessellator = net.minecraft.client.renderer.Tessellator.getInstance()
-        val buffer = tessellator.builder
-        buffer.begin(net.minecraft.client.renderer.VertexFormat.Mode.QUADS, net.minecraft.client.renderer.VertexFormats.POSITION_COLOR)
-        val r = (color shr 16 and 0xFF) / 255f
-        val g = (color shr 8 and 0xFF) / 255f
-        val b = (color and 0xFF) / 255f
-        val a = (color shr 24 and 0xFF) / 255f
-        buffer.vertex(matrix, x1.toFloat(), y2.toFloat(), 0f).color(r, g, b, a).endVertex()
-        buffer.vertex(matrix, x2.toFloat(), y2.toFloat(), 0f).color(r, g, b, a).endVertex()
-        buffer.vertex(matrix, x2.toFloat(), y1.toFloat(), 0f).color(r, g, b, a).endVertex()
-        buffer.vertex(matrix, x1.toFloat(), y1.toFloat(), 0f).color(r, g, b, a).endVertex()
-        tessellator.end()
+        net.minecraft.client.gui.DrawableHelper.fill(matrices, x1, y1, x2, y2, color)
     }
 
-    private fun drawRoundedRect(matrices: MatrixStack, x: Float, y: Float, w: Float, h: Float, radius: Float, color: Int) {
-        val r = radius.coerceAtMost(w / 2f).coerceAtMost(h / 2f)
-        val x1 = x; val y1 = y; val x2 = x + w; val y2 = y + h
-
-        fillRect(matrices, (x1 + r).toInt(), y1.toInt(), (x2 - r).toInt(), y2.toInt(), color)
-        fillRect(matrices, x1.toInt(), (y1 + r).toInt(), (x1 + r).toInt(), (y2 - r).toInt(), color)
-        fillRect(matrices, (x2 - r).toInt(), (y1 + r).toInt(), x2.toInt(), (y2 - r).toInt(), color)
-
-        drawCorner(matrices, x1 + r, y1 + r, r, 180f, 270f, color)
-        drawCorner(matrices, x2 - r, y1 + r, r, 270f, 360f, color)
-        drawCorner(matrices, x2 - r, y2 - r, r, 0f, 90f, color)
-        drawCorner(matrices, x1 + r, y2 - r, r, 90f, 180f, color)
-    }
-
-    private fun drawCorner(matrices: MatrixStack, cx: Float, cy: Float, r: Float, start: Float, end: Float, color: Int) {
-        var a = start
-        while (a < end) {
-            val rad1 = Math.toRadians(a.toDouble())
-            val rad2 = Math.toRadians((a + 8f).coerceAtMost(end).toDouble())
-            val px1 = cx + (cos(rad1) * r).toFloat()
-            val py1 = cy + (sin(rad1) * r).toFloat()
-            val px2 = cx + (cos(rad2) * r).toFloat()
-            val py2 = cy + (sin(rad2) * r).toFloat()
-            val minX = cx.coerceAtMost(px1).coerceAtMost(px2).toInt()
-            val maxX = cx.coerceAtLeast(px1).coerceAtLeast(px2).toInt()
-            val minY = cy.coerceAtMost(py1).coerceAtMost(py2).toInt()
-            val maxY = cy.coerceAtLeast(py1).coerceAtLeast(py2).toInt()
-            fillRect(matrices, minX, minY, max(minX + 1, maxX), max(minY + 1, maxY), color)
-            a += 8f
+    private fun drawRoundedRect(matrices: PoseStack, x: Float, y: Float, w: Float, h: Float, radius: Float, color: Int) {
+        // 简化：先画普通矩形（圆角用直角代替）
+        fillRect(matrices, x.toInt(), y.toInt(), (x + w).toInt(), (y + h).toInt(), color)
+        // 如果半径大于0，用几个小矩形模拟圆角（近似）
+        if (radius > 0) {
+            // 左上角
+            fillRect(matrices, x.toInt(), y.toInt(), (x + radius).toInt(), (y + radius).toInt(), color)
+            // 右上角
+            fillRect(matrices, (x + w - radius).toInt(), y.toInt(), (x + w).toInt(), (y + radius).toInt(), color)
+            // 左下角
+            fillRect(matrices, x.toInt(), (y + h - radius).toInt(), (x + radius).toInt(), (y + h).toInt(), color)
+            // 右下角
+            fillRect(matrices, (x + w - radius).toInt(), (y + h - radius).toInt(), (x + w).toInt(), (y + h).toInt(), color)
         }
     }
 
-    private fun drawVapeShadow(matrices: MatrixStack, x: Float, y: Float, w: Float, h: Float) {
+    private fun drawVapeShadow(matrices: PoseStack, x: Float, y: Float, w: Float, h: Float) {
         for (i in 0..8) {
             val offset = i.toFloat()
             val alpha = (15 * (1f - i / 8f)).toInt()
@@ -143,7 +115,7 @@ class ClickGuiScreen : Screen(Component.literal("Vape ClickGUI")) {
 
     // ==================== 核心渲染 ====================
 
-    override fun render(matrices: MatrixStack, mouseX: Int, mouseY: Int, delta: Float) {
+    override fun render(matrices: PoseStack, mouseX: Int, mouseY: Int, delta: Float) {
         fadeAnim += (1f - fadeAnim) * 0.2f
         val alpha = fadeAnim.coerceIn(0f, 1f)
         if (alpha < 0.01f) return
@@ -273,14 +245,14 @@ class ClickGuiScreen : Screen(Component.literal("Vape ClickGUI")) {
         }
     }
 
-    override fun renderBackground(matrices: MatrixStack) {
+    override fun renderBackground(matrices: PoseStack) {
         // 空实现
     }
 
     // ==================== 详情面板 ====================
 
     private fun renderModuleDetail(
-        matrices: MatrixStack,
+        matrices: PoseStack,
         mod: ClientModule,
         x: Float,
         y: Float,
@@ -340,7 +312,7 @@ class ClickGuiScreen : Screen(Component.literal("Vape ClickGUI")) {
     }
 
     private fun renderParamValue(
-        matrices: MatrixStack,
+        matrices: PoseStack,
         v: Value<*>,
         x: Float,
         y: Int,
