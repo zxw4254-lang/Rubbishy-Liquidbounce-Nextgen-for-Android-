@@ -28,6 +28,7 @@ import net.ccbluex.liquidbounce.config.types.list.Tagged
 import net.ccbluex.liquidbounce.config.types.list.Tagged.Companion.makeLookupTable
 import net.ccbluex.liquidbounce.event.events.KeyboardKeyEvent
 import net.ccbluex.liquidbounce.event.events.MouseButtonEvent
+import net.ccbluex.liquidbounce.utils.client.PlatformUtils
 import net.ccbluex.liquidbounce.utils.text.asPlainText
 import net.ccbluex.liquidbounce.utils.client.bold
 import net.ccbluex.liquidbounce.utils.client.copyable
@@ -249,13 +250,20 @@ data class InputBind(
         /**
          * Performs the platform (OS) specified render name of a modifier.
          */
-        val platformRenderName: String get() = when (Util.getPlatform()) {
-            Util.OS.WINDOWS -> when (this) {
+        val platformRenderName: String get() = when {
+            // Android 或 Pojav 环境：使用简化文本（触屏友好）
+            PlatformUtils.IS_ANDROID || PlatformUtils.IS_POJAV -> when (this) {
+                SHIFT -> "Shift"
+                CONTROL -> "Ctrl"
+                ALT -> "Alt"
+                SUPER -> "Super"
+            }
+            Util.getPlatform() == Util.OS.WINDOWS -> when (this) {
                 CONTROL -> "Ctrl"
                 SUPER -> "\u229e"
                 else -> tag
             }
-            Util.OS.OSX -> when (this) {
+            Util.getPlatform() == Util.OS.OSX -> when (this) {
                 SHIFT -> "\u21e7"
                 CONTROL -> "^"
                 ALT -> "\u2325"
