@@ -686,16 +686,6 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
             return true
         }
 
-        // 【新增】：ESC 或 右 Shift 退出 GUI
-        if (event.key() == GLFW.GLFW_KEY_ESCAPE || event.key() == GLFW.GLFW_KEY_RIGHT_SHIFT) {
-            if (searchFocused) {
-                searchFocused = false
-                return true
-            }
-            onClose()
-            return true
-        }
-
         if (searchFocused) {
             when (event.key()) {
                 GLFW.GLFW_KEY_BACKSPACE -> {
