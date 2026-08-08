@@ -19,16 +19,14 @@ import kotlin.math.max
 import kotlin.math.sin
 
 /**
- * LiquidBounce-style ClickGUI — category tabs on top, module list with inline expandable settings.
- * Semi-transparent dark background, no header/title bar (no "Dynamic Island").
+ * LiquidBounce-style ClickGUI — Multi-panel layout, each category is an independent floating panel.
  */
 class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
 
-    // ==================== Colors ====================
-    // All colors include proper alpha channel to prevent invisible text
-    private val ACCENT = 0xFF56B4E9.toInt()          // Light blue accent (LB style)
+    // ==================== Colors (降低透明度) ====================
+    private val ACCENT = 0xFF56B4E9.toInt()
     private val ACCENT_DARK = 0xFF3A7CA5.toInt()
-    private val BG = 0xDD1A1A1E.toInt()               // Semi-transparent dark panel
+    private val BG = 0xB0101014.toInt()               // 背景透明度从 0xDD 降至 0xB0 (69%)
     private val PANEL_BG = 0xCC16161A.toInt()
     private val TAB_BG = 0x9925252E.toInt()
     private val TAB_ACTIVE = 0xFF33333D.toInt()
@@ -41,34 +39,41 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
     private val SCROLL_THUMB = 0x50FFFFFF.toInt()
     private val SCROLL_THUMB_HOVER = 0x80FFFFFF.toInt()
     private val EXPANDED_BG = 0x0A56B4E9.toInt()
-    private val OVERLAY = 0x55000000                   // Game dimming overlay
-    private val SETTING_BG = 0x99101015.toInt()
+    private val OVERLAY = 0x30000000                   // 遮罩透明度从 0x55 降至 0x30 (19%)
+    private val SETTING_BG = 0x80080810.toInt()        // 设置区透明度从 0x99 降至 0x80 (50%)
 
     // ==================== Layout ====================
-    private val WIN_W = 300
-    private val WIN_H = 340
     private val CORNER = 4f
     private val ITEM_H = 18f
-    private val TAB_H = 18f
     private val SETTING_H = 18f
     private val SCROLL_W = 4f
     private val PADDING = 5f
     private val SETTING_INDENT = 8f
+    private val PANEL_GAP = 12f // 面板之间的间距
+    private val PANEL_MIN_W = 240
 
     // ==================== State ====================
-    private var currentCategory = 0
     private var expandedModule: ClientModule? = null
     private var searchText = ""
     private var searchFocused = false
     private var listeningValue: Value<*>? = null
     private val collapsedGroups = mutableSetOf<Value<*>>()
 
-    private var scrollOffset = 0f
-    private var targetScroll = 0f
-    private var draggingScroll = false
     private var fadeAnim = 0f
 
-    private val categories = ModuleCategories.entries.toList()
+    // 所有分类面板的列表
+    private val categories = ModuleCategories.entries.filter { it != ModuleCategories.HIDDEN }
+
+    private data class PanelData(
+        val category: ModuleCategories?,
+        var x: Float, var y: Float, var w: Float, var h: Float,
+        var scrollOffset: Float = 0f, var targetScroll: Float = 0f
+    )
+
+    private var panels = mutableListOf<PanelData>()
+    private var searchPanel: PanelData? = null
+
+    private var isLeftMouseDownCached = false
 
     override fun isPauseScreen() = false
     override fun shouldCloseOnEsc() = true
@@ -132,13 +137,10 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
         return if (str.isEmpty()) "..." else "$str..."
     }
 
-    // ==================== Data ====================
-
-    private fun getCategoryModules(): List<ClientModule> {
-        val cat = categories.getOrElse(currentCategory) { ModuleCategories.COMBAT }
+    private fun getCategoryModules(category: ModuleCategories): List<ClientModule> {
         return try {
             ModuleManager.getModules().toList()
-                .filter { it.category == cat && it.name != "ClickGUI" }
+                .filter { it.category == category && it.name != "ClickGUI" }
                 .filter { searchText.isEmpty() || it.name.contains(searchText, ignoreCase = true) }
         } catch (_: Exception) {
             emptyList()
@@ -175,173 +177,174 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
 
         val sc = minecraft!!.window.guiScaledWidth
         val sh = minecraft!!.window.guiScaledHeight
-        val winX = (sc - WIN_W) / 2f
-        val winY = (sh - WIN_H) / 2f
         val font = minecraft!!.font
 
-        // Window background — semi-transparent dark, rounded
-        drawRoundedRect(ctx, winX, winY, WIN_W.toFloat(), WIN_H.toFloat(), CORNER, BG)
+        val isSearching = searchText.isNotEmpty()
 
-        // Subtle border
-        drawRoundedRect(ctx, winX, winY, WIN_W.toFloat(), 1f, CORNER, 0x30FFFFFF.toInt())
-        drawRoundedRect(ctx, winX, winY + WIN_H - 1f, WIN_W.toFloat(), 1f, CORNER, 0x30FFFFFF.toInt())
+        // 计算面板布局
+        val targetPanels = mutableListOf<PanelData>()
 
-        // ===== Category tabs (top bar, no title/header) =====
-        val tabY = winY + PADDING
-        val tabAreaX = winX + PADDING
-        val tabAreaW = WIN_W - PADDING * 2
-        val tabW = tabAreaW / categories.size
+        if (isSearching) {
+            // 如果正在搜索，只显示一个居中面板展示所有搜索结果
+            val w = (sc * 0.6f).coerceAtLeast(PANEL_MIN_W.toFloat()).coerceAtMost(sc.toFloat())
+            val h = (sh * 0.7f).coerceAtMost(400f)
+            val x = (sc - w) / 2f
+            val y = (sh - h) / 2f
+            searchPanel = searchPanel ?: PanelData(null, x, y, w, h, 0f, 0f)
+            searchPanel?.let { it.x = x; it.y = y; it.w = w; it.h = h }
+            if (searchPanel != null) targetPanels.add(searchPanel!!)
+        } else {
+            searchPanel = null
+            // 计算分类面板平铺
+            val count = categories.size
+            val totalGap = PANEL_GAP * (count - 1)
+            val widthPerPanel = ((sc - totalGap) / count).coerceAtMost(PANEL_MIN_W * 1.6f)
+            val panelW = widthPerPanel.coerceAtLeast(PANEL_MIN_W.toFloat())
+            val panelH = (sh * 0.7f).coerceAtMost(400f)
 
-        // Tab background bar
-        fillRect(ctx, tabAreaX, tabY, tabAreaX + tabAreaW, tabY + TAB_H, TAB_BG)
+            // 重新计算 X 使整体居中
+            val totalW = panelW * count + PANEL_GAP * (count - 1)
+            val startX = (sc - totalW) / 2f
+            val panelY = (sh - panelH) / 2f
 
-        categories.forEachIndexed { i, cat ->
-            val tx = tabAreaX + i * tabW
-            val isActive = i == currentCategory
-            val isTabHover = mouseX in tx.toInt()..(tx + tabW - 1).toInt() &&
-                             mouseY in tabY.toInt()..(tabY + TAB_H).toInt()
-
-            if (isActive) {
-                fillRect(ctx, tx, tabY, tx + tabW - 1, tabY + TAB_H, TAB_ACTIVE)
-                // Accent underline
-                fillRect(ctx, tx, tabY + TAB_H - 1f, tx + tabW - 1, tabY + TAB_H, ACCENT)
-            } else if (isTabHover) {
-                fillRect(ctx, tx, tabY, tx + tabW - 1, tabY + TAB_H, HOVER)
+            for ((idx, cat) in categories.withIndex()) {
+                val panelX = startX + (panelW + PANEL_GAP) * idx
+                val panel = panels.find { it.category == cat }
+                if (panel != null) {
+                    panel.x = panelX; panel.y = panelY; panel.w = panelW; panel.h = panelH
+                    targetPanels.add(panel)
+                } else {
+                    targetPanels.add(PanelData(cat, panelX, panelY, panelW, panelH, 0f, 0f))
+                }
             }
-
-            // 【修复点 1】：将 (tabW - 4) 强制转换为 .toInt()，防止 Float 被传给 Int 参数
-            val label = trimText(font, cat.tag.uppercase(), (tabW - 4).toInt())
-            val cw = font.width(label)
-            drawText(ctx, font, label,
-                     (tx + ((tabW - 1) - cw) / 2f).toInt(),
-                     (tabY + 5f).toInt(),
-                     if (isActive) TEXT_BRIGHT else TEXT_DIM)
+            // 删除掉没有用到的旧面板
+            panels.removeAll { targetPanels.contains(it).not() && it.category != null }
+            panels = targetPanels
         }
 
-        // Divider below tabs
-        val divY = tabY + TAB_H + 1
-        fillRect(ctx, winX + PADDING, divY, winX + WIN_W - PADDING, divY + 1, BORDER)
+        // 绘制面板循环
+        for (panel in panels) {
+            val px = panel.x; val py = panel.y; val pw = panel.w; val ph = panel.h
 
-        // ===== Body area =====
-        val bodyY = divY + 2
-        val bodyH = WIN_H - (bodyY - winY) - PADDING
-        val bodyX = winX + PADDING
-        val bodyW = WIN_W - PADDING * 2
-        val listRight = bodyX + bodyW - SCROLL_W - 1
-        val scrollX = bodyX + bodyW - SCROLL_W
+            // 面板背景
+            drawRoundedRect(ctx, px, py, pw, ph, CORNER, BG)
+            // 面板边框
+            drawRoundedRect(ctx, px, py, pw, 1f, CORNER, BORDER)
+            drawRoundedRect(ctx, px, py + ph - 1f, pw, 1f, CORNER, BORDER)
 
-        // Gather modules
-        val modules = getCategoryModules()
-        val contentH = getContentHeight(modules)
-        val maxScroll = max(0f, contentH - bodyH)
-        targetScroll = targetScroll.coerceIn(0f, maxScroll)
-        scrollOffset += (targetScroll - scrollOffset) * 0.3f
-
-        // Scrollbar dragging
-        if (draggingScroll) {
-            // 【修复点 2】：使用兼容方法获取 GLFW 窗口句柄，替代不存在的 window 属性
-            if (!isLeftMouseDown()) {
-                draggingScroll = false
-            } else if (contentH > bodyH) {
-                val thumbH = (bodyH * bodyH / contentH).coerceAtLeast(12f)
-                val trackH = bodyH - thumbH
-                val clickRatio = ((mouseY - bodyY) / trackH).coerceIn(0f, 1f)
-                targetScroll = clickRatio * maxScroll
-            }
-        }
-
-        // ===== Draw module list with inline expansion =====
-        var curY = bodyY - scrollOffset
-
-        for (mod in modules) {
-            val isExpanded = expandedModule == mod
-            val modEndY = curY + ITEM_H
-
-            // Render module row if visible
-            if (modEndY >= bodyY && curY <= bodyY + bodyH) {
-                val isHover = mouseX in bodyX.toInt()..listRight.toInt() &&
-                              mouseY in curY.toInt()..modEndY.toInt()
-
-                // Row background
-                if (isHover) fillRect(ctx, bodyX, curY, listRight, modEndY, HOVER)
-                if (isExpanded) fillRect(ctx, bodyX, curY, listRight, modEndY, EXPANDED_BG)
-
-                // Module name — white when enabled, dim gray when disabled
-                val nameColor = if (mod.enabled) TEXT else TEXT_DIM
-                val nameMaxW = (listRight - bodyX - 16).toInt()
-                drawText(ctx, font, trimText(font, mod.name, nameMaxW),
-                         (bodyX + 4f).toInt(), (curY + 5f).toInt(), nameColor)
-
-                // Small dot indicator on the right (green=enabled, gray=disabled)
-                val dotX = listRight.toInt() - 8
-                val dotY = curY.toInt() + 7
-                fillRect(ctx, dotX, dotY, dotX + 4, dotY + 4,
-                         if (mod.enabled) ACCENT else 0x40808080.toInt())
+            // 面板标题栏
+            var panelModules: List<ClientModule>
+            if (isSearching) {
+                // 搜索模式：汇集所有分类的结果
+                panelModules = categories.flatMap { getCategoryModules(it) }.distinct()
+                drawText(ctx, font, "§lSearch Results", (px + 8f).toInt(), (py + 5f).toInt(), ACCENT)
+            } else {
+                // 正常模式：根据分类获取
+                val category = panel.category ?: continue
+                panelModules = getCategoryModules(category)
+                drawText(ctx, font, "§l${category.tag}", (px + 8f).toInt(), (py + 5f).toInt(), ACCENT)
+                // 标题下划线
+                val lineWidth = font.width(category.tag) + 10f
+                fillRect(ctx, px + 8f, py + 18f, px + 8f + lineWidth, py + 19f, ACCENT_DARK)
             }
 
-            curY += ITEM_H
+            // 计算滚动
+            val headerH = 24f
+            val listAreaX = px + PADDING
+            val listAreaW = pw - PADDING * 2 - SCROLL_W
+            val listAreaY = py + headerH + 4f
+            val listAreaH = ph - headerH - 8f
 
-            // Inline settings (expand below module)
-            if (isExpanded) {
-                val values = getVisibleValues(mod)
-                // Background for expanded settings area
-                if (values.isNotEmpty()) {
-                    val settingsBgH = values.size * SETTING_H
-                    if (curY + settingsBgH >= bodyY && curY <= bodyY + bodyH) {
-                        fillRect(ctx, bodyX, curY, listRight, curY + settingsBgH, SETTING_BG)
-                    }
+            val contentH = getContentHeight(panelModules)
+            val maxScroll = max(0f, contentH - listAreaH)
+            panel.targetScroll = panel.targetScroll.coerceIn(0f, maxScroll)
+            panel.scrollOffset += (panel.targetScroll - panel.scrollOffset) * 0.3f
+
+            // 绘制模块列表
+            var curY = listAreaY - panel.scrollOffset
+
+            for (mod in panelModules) {
+                val isExpanded = expandedModule == mod
+                val modEndY = curY + ITEM_H
+
+                if (modEndY >= listAreaY && curY <= listAreaY + listAreaH) {
+                    val isHover = mouseX in listAreaX.toInt()..(listAreaX + listAreaW).toInt() &&
+                            mouseY in curY.toInt()..modEndY.toInt()
+
+                    if (isHover) fillRect(ctx, listAreaX, curY, listAreaX + listAreaW, modEndY, HOVER)
+                    if (isExpanded) fillRect(ctx, listAreaX, curY, listAreaX + listAreaW, modEndY, EXPANDED_BG)
+
+                    val nameColor = if (mod.enabled) TEXT else TEXT_DIM
+                    val nameMaxW = (listAreaW - 16).toInt()
+                    drawText(ctx, font, trimText(font, mod.name, nameMaxW),
+                        (listAreaX + 4f).toInt(), (curY + 5f).toInt(), nameColor)
+
+                    val dotX = (listAreaX + listAreaW - 4f).toInt()
+                    val dotY = curY.toInt() + 7
+                    fillRect(ctx, dotX, dotY, dotX + 4, dotY + 4,
+                        if (mod.enabled) ACCENT else 0x40808080.toInt())
                 }
 
-                for ((v, depth) in values) {
-                    val settingEndY = curY + SETTING_H
+                curY += ITEM_H
 
-                    if (settingEndY >= bodyY && curY <= bodyY + bodyH) {
-                        val isSettingHover = mouseX in bodyX.toInt()..listRight.toInt() &&
-                                             mouseY in curY.toInt()..settingEndY.toInt()
+                // 绘制展开的设置项
+                if (isExpanded) {
+                    val values = getVisibleValues(mod)
+                    val settingBgH = values.size * SETTING_H
+                    if (curY + settingBgH >= listAreaY && curY <= listAreaY + listAreaH) {
+                        fillRect(ctx, listAreaX, curY, listAreaX + listAreaW, curY + settingBgH, SETTING_BG)
+                    }
 
-                        if (isSettingHover) {
-                            fillRect(ctx, bodyX, curY, listRight, settingEndY, HOVER)
+                    for ((v, depth) in values) {
+                        val settingEndY = curY + SETTING_H
+                        if (settingEndY >= listAreaY && curY <= listAreaY + listAreaH) {
+                            val isSettingHover = mouseX in listAreaX.toInt()..(listAreaX + listAreaW).toInt() &&
+                                    mouseY in curY.toInt()..settingEndY.toInt()
+
+                            if (isSettingHover) {
+                                fillRect(ctx, listAreaX, curY, listAreaX + listAreaW, settingEndY, HOVER)
+                            }
+
+                            renderSetting(ctx, v, depth, listAreaX, curY, listAreaW, mouseX, mouseY)
                         }
-
-                        renderSetting(ctx, v, depth, bodyX, curY, listRight - bodyX, mouseX, mouseY)
+                        curY += SETTING_H
                     }
-
-                    curY += SETTING_H
                 }
+            }
+
+            // 绘制滚动条
+            if (contentH > listAreaH) {
+                fillRect(ctx, listAreaX + listAreaW, listAreaY, listAreaX + listAreaW + SCROLL_W, listAreaY + listAreaH, SCROLL_TRACK)
+
+                val thumbH = (listAreaH * listAreaH / contentH).coerceAtLeast(12f)
+                val thumbY = listAreaY + if (maxScroll > 0f) (panel.scrollOffset / maxScroll) * (listAreaH - thumbH) else 0f
+                val isScrollHover = mouseX in (listAreaX + listAreaW).toInt()..(listAreaX + listAreaW + SCROLL_W).toInt() &&
+                        mouseY in thumbY.toInt()..(thumbY + thumbH).toInt()
+                val thumbColor = if (isScrollHover) SCROLL_THUMB_HOVER else SCROLL_THUMB
+
+                fillRect(ctx, listAreaX + listAreaW, thumbY, listAreaX + listAreaW + SCROLL_W, thumbY + thumbH, thumbColor)
             }
         }
 
-        // ===== Scrollbar =====
-        if (contentH > bodyH) {
-            fillRect(ctx, scrollX, bodyY, scrollX + SCROLL_W, bodyY + bodyH, SCROLL_TRACK)
-
-            val thumbH = (bodyH * bodyH / contentH).coerceAtLeast(12f)
-            val thumbY = bodyY + if (maxScroll > 0f) (scrollOffset / maxScroll) * (bodyH - thumbH) else 0f
-            val isScrollHover = mouseX in scrollX.toInt()..(scrollX + SCROLL_W).toInt() &&
-                                mouseY in thumbY.toInt()..(thumbY + thumbH).toInt()
-            val thumbColor = if (isScrollHover || draggingScroll) SCROLL_THUMB_HOVER else SCROLL_THUMB
-
-            fillRect(ctx, scrollX, thumbY, scrollX + SCROLL_W, thumbY + thumbH, thumbColor)
-        }
-
-        // ===== Search bar at bottom =====
-        val searchY = winY + WIN_H - PADDING - 16f
-        val searchX = winX + PADDING
-        val searchW = WIN_W - PADDING * 2
-        fillRect(ctx, searchX, searchY, searchX + searchW, searchY + 14f, TAB_BG)
+        // 底部搜索输入框
+        val searchY = sh - 30f
+        val searchX = (sc - 200f) / 2f
+        val searchW = 200f
+        fillRect(ctx, searchX, searchY, searchX + searchW, searchY + 16f, TAB_BG)
+        drawRoundedRect(ctx, searchX, searchY, searchW, 16f, 2f, BORDER)
 
         if (searchText.isEmpty()) {
             drawText(ctx, font, "§7Search modules...", (searchX + 4f).toInt(), (searchY + 3f).toInt(), TEXT_DIM)
         } else {
             drawText(ctx, font, trimText(font, searchText, (searchW - 20).toInt()),
-                     (searchX + 4f).toInt(), (searchY + 3f).toInt(), TEXT)
+                (searchX + 4f).toInt(), (searchY + 3f).toInt(), TEXT)
         }
 
         if (searchFocused) {
             val cursorX = searchX.toInt() + 4 + font.width(searchText)
             if (cursorX < searchX + searchW - 4) {
                 val blink = System.currentTimeMillis() / 500 % 2 == 0L
-                if (blink) fillRect(ctx, cursorX, searchY.toInt() + 2, cursorX + 1, searchY.toInt() + 12, TEXT_BRIGHT)
+                if (blink) fillRect(ctx, cursorX, searchY.toInt() + 2, cursorX + 1, searchY.toInt() + 14, TEXT_BRIGHT)
             }
         }
     }
@@ -364,24 +367,24 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
                 val isCollapsed = collapsedGroups.contains(v)
                 val arrow = if (isCollapsed) "▶" else "▼"
                 drawText(ctx, font, "$arrow ${trimText(font, v.name, (w - 30 - indent).toInt())}",
-                         labelX, (y + 5f).toInt(), TEXT)
+                    labelX, (y + 5f).toInt(), TEXT)
             }
             actual is Boolean -> {
                 drawText(ctx, font, trimText(font, v.name, (w - 50 - indent).toInt()),
-                         labelX, (y + 5f).toInt(), TEXT_DIM)
+                    labelX, (y + 5f).toInt(), TEXT_DIM)
                 val status = if (actual) "§aON" else "§cOFF"
                 drawText(ctx, font, status, valueX, (y + 5f).toInt(), if (actual) ACCENT else TEXT_DIM)
             }
             isBindValue(v) -> {
                 drawText(ctx, font, trimText(font, v.name, (w - 60 - indent).toInt()),
-                         labelX, (y + 5f).toInt(), TEXT_DIM)
+                    labelX, (y + 5f).toInt(), TEXT_DIM)
                 val isListening = listeningValue == v
                 val display = if (isListening) "§e[...]" else "§7${formatBindValue(v)}"
                 drawText(ctx, font, display, valueX, (y + 5f).toInt(), if (isListening) ACCENT else TEXT_DIM)
             }
             isSliderValue(v) -> {
                 drawText(ctx, font, trimText(font, v.name, (w - 70 - indent).toInt()),
-                         labelX, (y + 3f).toInt(), TEXT_DIM)
+                    labelX, (y + 3f).toInt(), TEXT_DIM)
 
                 var fv = 0f; var minV = 0f; var maxV = 100f
                 if (actual is Number) {
@@ -400,19 +403,19 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
                 fillRect(ctx, sliderX, sliderY, sliderX + sliderW, sliderY + 2, 0x30FFFFFF.toInt())
                 fillRect(ctx, sliderX, sliderY, sliderX + (sliderW * progress).toInt(), sliderY + 2, ACCENT)
                 fillRect(ctx, sliderX + (sliderW * progress).toInt() - 1, sliderY - 1,
-                         sliderX + (sliderW * progress).toInt() + 1, sliderY + 3, TEXT_BRIGHT)
+                    sliderX + (sliderW * progress).toInt() + 1, sliderY + 3, TEXT_BRIGHT)
 
                 drawText(ctx, font, "%.1f".format(fv), sliderX + sliderW + 3, (y + 3f).toInt(), TEXT_DIM)
             }
             isColorValue(v) -> {
                 drawText(ctx, font, trimText(font, v.name, (w - 50 - indent).toInt()),
-                         labelX, (y + 5f).toInt(), TEXT_DIM)
+                    labelX, (y + 5f).toInt(), TEXT_DIM)
                 val color = extractColor(v)
                 fillRect(ctx, valueX, y.toInt() + 4, valueX + 10, y.toInt() + 14, color.rgb)
             }
             else -> {
                 drawText(ctx, font, trimText(font, v.name, (w - 50 - indent).toInt()),
-                         labelX, (y + 5f).toInt(), TEXT_DIM)
+                    labelX, (y + 5f).toInt(), TEXT_DIM)
                 drawText(ctx, font, "§7${getDisplayValue(v)}", valueX, (y + 5f).toInt(), TEXT_DIM)
             }
         }
@@ -421,96 +424,80 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
     // ==================== Click handling ====================
 
     override fun mouseClicked(event: MouseButtonEvent, doubleClick: Boolean): Boolean {
-        val btn = event.button()
+        val btn = event.button() // 0 = 左键, 1 = 右键
         val mx = event.x().toInt()
         val my = event.y().toInt()
         val sc = minecraft!!.window.guiScaledWidth
         val sh = minecraft!!.window.guiScaledHeight
-        val winX = (sc - WIN_W) / 2f
-        val winY = (sh - WIN_H) / 2f
-        val font = minecraft!!.font
 
-        // Category tabs
-        val tabY = winY + PADDING
-        val tabAreaX = winX + PADDING
-        val tabAreaW = WIN_W - PADDING * 2
-        val tabW = tabAreaW / categories.size
-
-        if (btn == 0 && my in tabY.toInt()..(tabY + TAB_H).toInt()) {
-            categories.forEachIndexed { i, _ ->
-                val tx = tabAreaX + i * tabW
-                if (mx in tx.toInt()..(tx + tabW - 1).toInt()) {
-                    currentCategory = i
-                    targetScroll = 0f
-                    scrollOffset = 0f
-                    expandedModule = null
-                    listeningValue = null
-                    return true
-                }
-            }
-        }
-
-        // Body area setup
-        val divY = tabY + TAB_H + 1
-        val bodyY = divY + 2
-        val bodyH = WIN_H - (bodyY - winY) - PADDING - 18f // leave room for search
-        val bodyX = winX + PADDING
-        val bodyW = WIN_W - PADDING * 2
-        val listRight = bodyX + bodyW - SCROLL_W - 1
-        val scrollX = bodyX + bodyW - SCROLL_W
-
-        val modules = getCategoryModules()
-        val contentH = getContentHeight(modules)
-        val maxScroll = max(0f, contentH - bodyH)
-
-        // Search bar at bottom
-        val searchY = winY + WIN_H - PADDING - 16f
-        val searchX = winX + PADDING
-        val searchW = WIN_W - PADDING * 2
+        // 搜索框点击
+        val searchY = sh - 30f
+        val searchX = (sc - 200f) / 2f
+        val searchW = 200f
         if (mx in searchX.toInt()..(searchX + searchW).toInt() &&
-            my in searchY.toInt()..(searchY + 14f).toInt()) {
+            my in searchY.toInt()..(searchY + 16f).toInt()) {
             searchFocused = true
             return true
         }
         searchFocused = false
 
-        // Scrollbar click
-        if (contentH > bodyH &&
-            mx in scrollX.toInt()..(scrollX + SCROLL_W).toInt() &&
-            my in bodyY.toInt()..(bodyY + bodyH).toInt()) {
-            draggingScroll = true
-            val thumbH = (bodyH * bodyH / contentH).coerceAtLeast(12f)
-            val thumbY = bodyY + if (maxScroll > 0f) (scrollOffset / maxScroll) * (bodyH - thumbH) else 0f
-            if (my < thumbY || my > thumbY + thumbH) {
-                val trackH = bodyH - thumbH
-                val clickRatio = ((my - bodyY) / trackH).coerceIn(0f, 1f)
-                targetScroll = clickRatio * maxScroll
+        // 识别点击的是哪个面板
+        var targetPanel: PanelData? = null
+        for (panel in panels) {
+            if (mx in panel.x.toInt()..(panel.x + panel.w).toInt() &&
+                my in panel.y.toInt()..(panel.y + panel.h).toInt()) {
+                targetPanel = panel
+                break
             }
-            return true
+        }
+        if (targetPanel == null) return super.mouseClicked(event, doubleClick)
+
+        val panel = targetPanel!!
+        val listAreaX = panel.x + PADDING
+        val listAreaW = panel.w - PADDING * 2 - SCROLL_W
+        val listAreaY = panel.y + 28f
+        val listAreaH = panel.h - 32f
+
+        // 是否在面板的滚动条区域点击
+        if (mx in (listAreaX + listAreaW).toInt()..(listAreaX + listAreaW + SCROLL_W).toInt() &&
+            my in listAreaY.toInt()..(listAreaY + listAreaH).toInt()) {
+            val modules = getModulesForPanel(panel)
+            val contentH = getContentHeight(modules)
+            if (contentH > listAreaH) {
+                val thumbH = (listAreaH * listAreaH / contentH).coerceAtLeast(12f)
+                val thumbY = listAreaY + if (contentH > 0f) (panel.scrollOffset / contentH) * (listAreaH - thumbH) else 0f
+                if (my < thumbY || my > thumbY + thumbH) {
+                    val trackH = listAreaH - thumbH
+                    val clickRatio = ((my - listAreaY) / trackH).coerceIn(0f, 1f)
+                    panel.targetScroll = clickRatio * contentH
+                }
+                return true
+            }
         }
 
-        // Module list + settings click
-        if (mx in bodyX.toInt()..listRight.toInt() &&
-            my in bodyY.toInt()..(bodyY + bodyH).toInt()) {
+        // 模块及设置点击检测
+        if (mx in listAreaX.toInt()..(listAreaX + listAreaW).toInt() &&
+            my in listAreaY.toInt()..(listAreaY + listAreaH).toInt()) {
 
-            var curY = bodyY - scrollOffset
+            val modules = getModulesForPanel(panel)
+            var curY = listAreaY - panel.scrollOffset
 
             for (mod in modules) {
                 val isExpanded = expandedModule == mod
                 val modEndY = curY + ITEM_H
 
-                // Click on module row
+                // 点击模块行
                 if (my in curY.toInt()..modEndY.toInt()) {
                     when (btn) {
-                        0 -> {
-                            // Left click: expand/collapse settings (like the screenshot — click to expand)
-                            expandedModule = if (expandedModule == mod) null else mod
-                        }
-                        1 -> {
-                            // Right click: toggle module on/off
+                        0 -> { // 左键：Toggle 开启/关闭
                             if (mod.name != "ClickGUI") {
-                                mod.enabled = !mod.enabled
+                                try {
+                                    mod.enabled = !mod.enabled
+                                } catch (_: Exception) { }
                             }
+                        }
+                        1 -> { // 右键：展开/收起设置面板
+                            expandedModule = if (expandedModule == mod) null else mod
                         }
                     }
                     return true
@@ -518,13 +505,13 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
 
                 curY += ITEM_H
 
-                // Click on setting row
+                // 点击设置行
                 if (isExpanded) {
                     val values = getVisibleValues(mod)
                     for ((v, depth) in values) {
                         val settingEndY = curY + SETTING_H
                         if (my in curY.toInt()..settingEndY.toInt()) {
-                            handleSettingClick(v, btn, mx.toFloat(), curY, listRight - bodyX, bodyX)
+                            handleSettingClick(v, btn, mx.toFloat(), curY, listAreaW, listAreaX)
                             return true
                         }
                         curY += SETTING_H
@@ -536,30 +523,34 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
         return super.mouseClicked(event, doubleClick)
     }
 
+    private fun getModulesForPanel(panel: PanelData): List<ClientModule> {
+        return if (searchText.isNotEmpty()) {
+            categories.flatMap { getCategoryModules(it) }.distinct()
+        } else {
+            panel.category?.let { getCategoryModules(it) } ?: emptyList()
+        }
+    }
+
     private fun handleSettingClick(v: Value<*>, btn: Int, mx: Float, y: Float, w: Float, x: Float) {
-        if (btn != 0) return
+        if (btn != 0) return // 仅左键交互
         val actual = getActualValue(v) ?: return
 
-        // Group: toggle collapse
         if (isGroupValue(v)) {
             if (collapsedGroups.contains(v)) collapsedGroups.remove(v)
             else collapsedGroups.add(v)
             return
         }
 
-        // Boolean: toggle
         if (actual is Boolean) {
             trySetValue(v, !actual)
             return
         }
 
-        // Bind: start listening
         if (isBindValue(v)) {
             listeningValue = if (listeningValue == v) null else v
             return
         }
 
-        // Slider: click to set value
         if (isSliderValue(v)) {
             val valueX = (x + w - 44).toInt()
             val sliderW = 36
@@ -592,7 +583,14 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
     }
 
     override fun mouseScrolled(mouseX: Double, mouseY: Double, horizontal: Double, vertical: Double): Boolean {
-        targetScroll = (targetScroll - vertical.toFloat() * 20f).coerceIn(0f, Float.MAX_VALUE)
+        // 查找鼠标当前悬浮的面板
+        for (panel in panels) {
+            if (mouseX in panel.x.toDouble()..(panel.x + panel.w).toDouble() &&
+                mouseY in panel.y.toDouble()..(panel.y + panel.h).toDouble()) {
+                panel.targetScroll = (panel.targetScroll - vertical.toFloat() * 20f).coerceAtLeast(0f)
+                return true
+            }
+        }
         return true
     }
 
@@ -674,36 +672,19 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
                     searchText += codepoint.toChar()
                     return true
                 }
-            } catch (_: Exception) {
-                // Never crash from char typing
-            }
+            } catch (_: Exception) { }
         }
         return super.charTyped(event)
     }
 
-    // ==================== Close ====================
-
     override fun onClose() {
-        // 【修复点 3】：使用兼容的反射垫片代替直接调用 setScreen
         setScreenCompat(null)
         fadeAnim = 0f
     }
 
     // ==========================================================
-    // 以下为添加的辅助方法，用于解决原生的 GLFW 句柄获取兼容和关闭屏幕反射兼容问题
+    // 辅助方法
     // ==========================================================
-
-    private fun isLeftMouseDown(): Boolean {
-        var windowHandle: Long = 0L
-        try {
-            val windowField = minecraft!!.window.javaClass.getDeclaredField("window")
-            windowField.isAccessible = true
-            windowHandle = windowField.getLong(minecraft!!.window)
-        } catch (_: Exception) {
-            return false
-        }
-        return GLFW.glfwGetMouseButton(windowHandle, GLFW.GLFW_MOUSE_BUTTON_LEFT) == GLFW.GLFW_PRESS
-    }
 
     private fun setScreenCompat(screen: Screen?) {
         val mc = minecraft ?: return
@@ -720,7 +701,7 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
         } catch (_: Exception) { }
     }
 
-    // ==================== Value helpers ====================
+    // ==================== Value helpers (防递归死锁优化版) ====================
 
     private fun getVisibleValues(module: ClientModule): List<Pair<Value<*>, Int>> {
         val result = mutableListOf<Pair<Value<*>, Int>>()
@@ -730,7 +711,11 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
             return emptyList()
         }
 
+        val visited = IdentityHashMap<Value<*>, Boolean>() // 核心修复：防止无限递归
+
         fun process(v: Value<*>, depth: Int) {
+            if (visited.containsKey(v)) return // 如果已经处理过此对象，直接跳过
+            visited[v] = true
             result.add(Pair(v, depth))
             if (isGroupValue(v) && !collapsedGroups.contains(v)) {
                 getGroupChildren(v).forEach { process(it, depth + 1) }
@@ -750,10 +735,10 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
     }
 
     private fun isGroupValue(v: Value<*>): Boolean {
+        // 核心修复：只检测类名，绝不调用 getGroupChildren()
         return try {
             v.javaClass.simpleName.contains("Group", true) ||
-            v.javaClass.simpleName.contains("Container", true) ||
-            getGroupChildren(v).isNotEmpty()
+            v.javaClass.simpleName.contains("Container", true)
         } catch (_: Exception) {
             false
         }
@@ -761,18 +746,35 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
 
     private fun getGroupChildren(v: Value<*>): List<Value<*>> {
         val list = mutableListOf<Value<*>>()
+        val visited = IdentityHashMap<Value<*>, Boolean>() // 规避自引用遍历
         try {
             for (m in v.javaClass.methods) {
                 if ((m.name.equals("getValues", true) || m.name.equals("getSubValues", true)) && m.parameterCount == 0) {
                     val res = m.invoke(v)
-                    if (res is Collection<*>) list.addAll(res.filterIsInstance<Value<*>>())
+                    if (res is Collection<*>) {
+                        for (child in res) {
+                            if (child is Value<*> && !visited.containsKey(child)) {
+                                visited[child] = true
+                                list.add(child)
+                            }
+                        }
+                    }
                 }
             }
             for (f in v.javaClass.declaredFields) {
                 f.isAccessible = true
                 val valObj = f.get(v)
-                if (valObj is Value<*>) list.add(valObj)
-                else if (valObj is Collection<*>) list.addAll(valObj.filterIsInstance<Value<*>>())
+                if (valObj is Value<*> && !visited.containsKey(valObj)) {
+                    visited[valObj] = true
+                    list.add(valObj)
+                } else if (valObj is Collection<*>) {
+                    for (child in valObj) {
+                        if (child is Value<*> && !visited.containsKey(child)) {
+                            visited[child] = true
+                            list.add(child)
+                        }
+                    }
+                }
             }
         } catch (_: Exception) {}
         return list.distinct()
