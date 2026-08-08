@@ -12,6 +12,7 @@ import net.minecraft.client.gui.GuiGraphicsExtractor
 import net.minecraft.client.input.MouseButtonEvent
 import net.minecraft.client.input.KeyEvent
 import net.minecraft.client.input.CharacterEvent
+import net.minecraft.client.input.MouseDragEvent
 import net.minecraft.network.chat.Component
 import org.lwjgl.glfw.GLFW
 import java.awt.Color
@@ -44,7 +45,7 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
     private val OVERLAY = 0x30000000                   // 遮罩透明度从 0x55 降至 0x30 (19%)
     private val SETTING_BG = 0x80080810.toInt()        // 设置区透明度从 0x99 降至 0x80 (50%)
 
-    // ==================== Layout ====================
+    // ==================== Layout (宽度缩小，高度保持原样) ====================
     private val CORNER = 4f
     private val ITEM_H = 18f
     private val SETTING_H = 18f
@@ -52,7 +53,8 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
     private val PADDING = 5f
     private val SETTING_INDENT = 8f
     private val PANEL_GAP = 12f // 面板之间的间距
-    private val PANEL_MIN_W = 240
+    private val PANEL_MIN_W = 120 // 宽度从 240 缩小到 120
+    private val PANEL_MAX_H = 400 // 高度保持原样 400
 
     // ==================== State ====================
     private var expandedModule: ClientModule? = null
@@ -70,13 +72,18 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
     private data class PanelData(
         val category: ModuleCategory?,
         var x: Float, var y: Float, var w: Float, var h: Float,
-        var scrollOffset: Float = 0f, var targetScroll: Float = 0f
+        var scrollOffset: Float = 0f, var targetScroll: Float = 0f,
+        var draggingScroll: Boolean = false,
+        // 【新增变量】：用于支持整个面板被鼠标拖拽移动
+        var draggingPanel: Boolean = false,
+        var dragOffsetX: Float = 0f,
+        var dragOffsetY: Float = 0f
     )
 
     private var panels = mutableListOf<PanelData>()
     private var searchPanel: PanelData? = null
 
-    private var isLeftMouseDownCached = false
+    private var isLeftMouseDownCached = false // 保留原变量，确保不删减
 
     override fun isPauseScreen() = false
     override fun shouldCloseOnEsc() = true
@@ -190,7 +197,7 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
         if (isSearching) {
             // 如果正在搜索，只显示一个居中面板展示所有搜索结果
             val w = (sc * 0.6f).coerceAtLeast(PANEL_MIN_W.toFloat()).coerceAtMost(sc.toFloat())
-            val h = (sh * 0.7f).coerceAtMost(400f)
+            val h = (sh * 0.7f).coerceAtMost(PANEL_MAX_H.toFloat())
             val x = (sc - w) / 2f
             val y = (sh - h) / 2f
             searchPanel = searchPanel ?: PanelData(null, x, y, w, h, 0f, 0f)
@@ -202,8 +209,8 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
             val count = categories.size
             val totalGap = PANEL_GAP * (count - 1)
             val widthPerPanel = ((sc - totalGap) / count).coerceAtMost(PANEL_MIN_W * 1.6f)
-            val panelW = widthPerPanel.coerceAtLeast(PANEL_MIN_W.toFloat())
-            val panelH = (sh * 0.7f).coerceAtMost(400f)
+            val panelW = widthPerPanel.coerceAtLeast(PANEL_MIN_W.toFloat()) // 宽度限制在 120~192 之间
+            val panelH = (sh * 0.7f).coerceAtMost(PANEL_MAX_H.toFloat())    // 高度保持原样 400
 
             // 重新计算 X 使整体居中
             val totalW = panelW * count + PANEL_GAP * (count - 1)
@@ -323,16 +330,16 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
                 val thumbY = listAreaY + if (maxScroll > 0f) (panel.scrollOffset / maxScroll) * (listAreaH - thumbH) else 0f
                 val isScrollHover = mouseX in (listAreaX + listAreaW).toInt()..(listAreaX + listAreaW + SCROLL_W).toInt() &&
                         mouseY in thumbY.toInt()..(thumbY + thumbH).toInt()
-                val thumbColor = if (isScrollHover) SCROLL_THUMB_HOVER else SCROLL_THUMB
+                val thumbColor = if (isScrollHover || panel.draggingScroll) SCROLL_THUMB_HOVER else SCROLL_THUMB
 
                 fillRect(ctx, listAreaX + listAreaW, thumbY, listAreaX + listAreaW + SCROLL_W, thumbY + thumbH, thumbColor)
             }
         }
 
-        // 底部搜索输入框
+        // 底部搜索输入框 (缩小宽度适配小面板)
         val searchY = sh - 30f
-        val searchX = (sc - 200f) / 2f
-        val searchW = 200f
+        val searchX = (sc - 160f) / 2f
+        val searchW = 160f
         fillRect(ctx, searchX, searchY, searchX + searchW, searchY + 16f, TAB_BG)
         drawRoundedRect(ctx, searchX, searchY, searchW, 16f, 2f, BORDER)
 
@@ -435,8 +442,8 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
 
         // 搜索框点击
         val searchY = sh - 30f
-        val searchX = (sc - 200f) / 2f
-        val searchW = 200f
+        val searchX = (sc - 160f) / 2f
+        val searchW = 160f
         if (mx in searchX.toInt()..(searchX + searchW).toInt() &&
             my in searchY.toInt()..(searchY + 16f).toInt()) {
             searchFocused = true
@@ -453,7 +460,21 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
                 break
             }
         }
-        if (targetPanel == null) return super.mouseClicked(event, doubleClick)
+
+        // 【新增】拖动面板头部
+        if (targetPanel != null) {
+            val headerY = targetPanel.y
+            val headerH = 24f
+            if (my in headerY.toInt()..(headerY + headerH).toInt()) {
+                targetPanel.draggingPanel = true
+                targetPanel.dragOffsetX = mx - targetPanel.x
+                targetPanel.dragOffsetY = my - targetPanel.y
+                return true
+            }
+        }
+
+        // 如果没点中任何面板，直接返回 true 以拦截操作，防止乱挖乱动
+        if (targetPanel == null) return true
 
         val panel = targetPanel!!
         val listAreaX = panel.x + PADDING
@@ -467,13 +488,7 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
             val modules = getModulesForPanel(panel)
             val contentH = getContentHeight(modules)
             if (contentH > listAreaH) {
-                val thumbH = (listAreaH * listAreaH / contentH).coerceAtLeast(12f)
-                val thumbY = listAreaY + if (contentH > 0f) (panel.scrollOffset / contentH) * (listAreaH - thumbH) else 0f
-                if (my < thumbY || my > thumbY + thumbH) {
-                    val trackH = listAreaH - thumbH
-                    val clickRatio = ((my - listAreaY) / trackH).coerceIn(0f, 1f)
-                    panel.targetScroll = clickRatio * contentH
-                }
+                panel.draggingScroll = true
                 return true
             }
         }
@@ -523,7 +538,46 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
             }
         }
 
-        return super.mouseClicked(event, doubleClick)
+        return true // 【增强】强制拦截所有内部点击，防止掉落物品等原版操作
+    }
+
+    // 【新增】鼠标拖拽处理
+    override fun mouseDragged(event: MouseDragEvent): Boolean {
+        val dx = event.dragX()
+        val dy = event.dragY()
+        val mx = event.x().toFloat()
+        val my = event.y().toFloat()
+
+        for (panel in panels) {
+            // 【新增】面板整体拖拽逻辑
+            if (panel.draggingPanel) {
+                panel.x = mx - panel.dragOffsetX
+                panel.y = my - panel.dragOffsetY
+                return true
+            }
+
+            // 保持原滚动条拖拽逻辑
+            if (panel.draggingScroll) {
+                val modules = getModulesForPanel(panel)
+                val contentH = getContentHeight(modules)
+                val listAreaH = panel.h - 32f
+                if (contentH > listAreaH) {
+                    val maxScroll = contentH - listAreaH
+                    panel.targetScroll = (panel.targetScroll - dy.toFloat() * 1.2f).coerceIn(0f, maxScroll)
+                }
+                return true
+            }
+        }
+        return true
+    }
+
+    override fun mouseReleased(event: MouseButtonEvent): Boolean {
+        // 松开鼠标时，重置所有面板的滚动和拖拽状态
+        for (panel in panels) {
+            panel.draggingScroll = false
+            panel.draggingPanel = false
+        }
+        return true
     }
 
     private fun getModulesForPanel(panel: PanelData): List<ClientModule> {
@@ -594,7 +648,7 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
                 return true
             }
         }
-        return true
+        return true // 【拦截】阻止滚轮传给原版游戏
     }
 
     // ==================== Keyboard ====================
@@ -605,7 +659,8 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
             return true
         }
 
-        if (event.key() == GLFW.GLFW_KEY_ESCAPE) {
+        // 【新增】：ESC 或 右 Shift 退出 GUI
+        if (event.key() == GLFW.GLFW_KEY_ESCAPE || event.key() == GLFW.GLFW_KEY_RIGHT_SHIFT) {
             if (searchFocused) {
                 searchFocused = false
                 return true
@@ -634,7 +689,7 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
             }
         }
 
-        return super.keyPressed(event)
+        return true // 【拦截】完全拦截原版按键，防止在GUI里走动或执行动作
     }
 
     override fun charTyped(event: CharacterEvent): Boolean {
@@ -677,7 +732,7 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
                 }
             } catch (_: Exception) { }
         }
-        return super.charTyped(event)
+        return true // 【拦截】字符输入拦截
     }
 
     override fun onClose() {
