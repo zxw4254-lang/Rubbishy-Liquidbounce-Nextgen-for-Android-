@@ -172,12 +172,12 @@ dependencies {
 addResolvedDependencies(jij, "compileOnly", "include", "api")
 
 tasks.processResources {
-    dependsOn("buildTheme")
-
+    //dependsOn("buildTheme")
+/*
     from("src-theme/dist") {
         into("resources/liquidbounce/themes/liquidbounce")
     }
-
+*/
     val modVersion = providers.gradleProperty("mod_version")
     val minecraftVersion = providers.gradleProperty("mod_mc_version")
     val fabricVersion = libs.versions.fabric.api
