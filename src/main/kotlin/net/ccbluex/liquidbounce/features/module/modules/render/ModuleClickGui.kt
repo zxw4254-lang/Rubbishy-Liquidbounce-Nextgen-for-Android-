@@ -36,16 +36,15 @@ object ModuleClickGui :
 
     /**
      * 全局按键监听：右 Shift (keyCode=344) 或 Android 映射 keyCode=54
-     * 【重大修复】：处理完毕时立即调用 `event.cancelEvent()`，
-     * 彻底阻断事件向原版 WebUI 监听器传播，永久告别浏览器报错。
+     * 【重大修复】：将 cancelEvent() 替换为 cancel()，彻底阻断事件向原版 WebUI 传播。
      */
     @Suppress("unused")
     private val keyHandler = handler<KeyboardKeyEvent> { event ->
         if (event.action == 1 &&
             (event.keyCode == GLFW.GLFW_KEY_RIGHT_SHIFT || event.keyCode == 54)
         ) {
-            // 【关键一行】：拦截按键，防止 ScreenManager/ThemeManager 等原版监听器捕获到该按键
-            event.cancelEvent()
+            // 【修复点】：使用标准的事件取消方法
+            event.cancel()
             
             val currentScreen = mc.gui.screen()
             if (currentScreen == null) {
