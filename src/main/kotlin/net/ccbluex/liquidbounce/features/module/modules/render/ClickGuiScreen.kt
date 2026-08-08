@@ -26,24 +26,24 @@ import kotlin.math.sin
  */
 class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
 
-    // ==================== Colors (降低透明度) ====================
+    // ==================== Colors (大幅降低透明度，按用户表格修改) ====================
     private val ACCENT = 0xFF56B4E9.toInt()
     private val ACCENT_DARK = 0xFF3A7CA5.toInt()
-    private val BG = 0xB0101014.toInt()               // 背景透明度从 0xDD 降至 0xB0 (69%)
-    private val PANEL_BG = 0xCC16161A.toInt()
-    private val TAB_BG = 0x9925252E.toInt()
+    private val BG = 0x90101014.toInt()               // 面板背景从 0xB0 → 0x90 (56%)
+    private val PANEL_BG = 0xA816161A.toInt()         // 面板内部从 0xCC → 0xA8 (66%)
+    private val TAB_BG = 0x8025252E.toInt()           // 搜索栏从 0x99 → 0x80 (50%)
     private val TAB_ACTIVE = 0xFF33333D.toInt()
     private val TEXT = 0xFFE8E8E8.toInt()
     private val TEXT_DIM = 0xFF8E8E8E.toInt()
     private val TEXT_BRIGHT = 0xFFFFFFFF.toInt()
-    private val BORDER = 0x22FFFFFF.toInt()
+    private val BORDER = 0x1CFFFFFF.toInt()           // 边框从 0x22 → 0x1C (11%)
     private val HOVER = 0x10FFFFFF.toInt()
-    private val SCROLL_TRACK = 0x10FFFFFF.toInt()
-    private val SCROLL_THUMB = 0x50FFFFFF.toInt()
+    private val SCROLL_TRACK = 0x1CFFFFFF.toInt()     // 滚动条轨道从 0x10 → 0x1C (11%)
+    private val SCROLL_THUMB = 0x44FFFFFF.toInt()     // 滚动条滑块从 0x50 → 0x44 (27%)
     private val SCROLL_THUMB_HOVER = 0x80FFFFFF.toInt()
     private val EXPANDED_BG = 0x0A56B4E9.toInt()
-    private val OVERLAY = 0x30000000                   // 遮罩透明度从 0x55 降至 0x30 (19%)
-    private val SETTING_BG = 0x80080810.toInt()        // 设置区透明度从 0x99 降至 0x80 (50%)
+    private val OVERLAY = 0x20000000                   // 游戏遮罩从 0x30 → 0x20 (13%)
+    private val SETTING_BG = 0x60080810.toInt()        // 设置区从 0x80 → 0x60 (38%)
 
     // ==================== Layout (宽度缩小，高度保持原样) ====================
     private val CORNER = 4f
@@ -55,6 +55,7 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
     private val PANEL_GAP = 12f // 面板之间的间距
     private val PANEL_MIN_W = 120 // 宽度从 240 缩小到 120
     private val PANEL_MAX_H = 400 // 高度保持原样 400
+    private val HEADER_H = 24f
 
     // ==================== State ====================
     private var expandedModule: ClientModule? = null
@@ -74,10 +75,10 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
         var x: Float, var y: Float, var w: Float, var h: Float,
         var scrollOffset: Float = 0f, var targetScroll: Float = 0f,
         var draggingScroll: Boolean = false,
-        // 【新增变量】：用于支持整个面板被鼠标拖拽移动
         var draggingPanel: Boolean = false,
         var dragOffsetX: Float = 0f,
-        var dragOffsetY: Float = 0f
+        var dragOffsetY: Float = 0f,
+        var collapsed: Boolean = false // 【新增】：折叠状态
     )
 
     private var panels = mutableListOf<PanelData>()
@@ -221,7 +222,9 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
                 val panelX = startX + (panelW + PANEL_GAP) * idx
                 val panel = panels.find { it.category == cat }
                 if (panel != null) {
-                    panel.x = panelX; panel.y = panelY; panel.w = panelW; panel.h = panelH
+                    // 仅更新宽和高，不重置 x, y（保留用户拖动后的位置）
+                    panel.w = panelW
+                    panel.h = panelH
                     targetPanels.add(panel)
                 } else {
                     targetPanels.add(PanelData(cat, panelX, panelY, panelW, panelH, 0f, 0f))
@@ -236,27 +239,33 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
         for (panel in panels) {
             val px = panel.x; val py = panel.y; val pw = panel.w; val ph = panel.h
 
+            // 【新增】判断是否折叠，决定实际渲染的高度
+            val actualHeight = if (panel.collapsed) HEADER_H + 2f else ph
+
             // 面板背景
-            drawRoundedRect(ctx, px, py, pw, ph, CORNER, BG)
+            drawRoundedRect(ctx, px, py, pw, actualHeight, CORNER, BG)
             // 面板边框
             drawRoundedRect(ctx, px, py, pw, 1f, CORNER, BORDER)
-            drawRoundedRect(ctx, px, py + ph - 1f, pw, 1f, CORNER, BORDER)
+            drawRoundedRect(ctx, px, py + actualHeight - 1f, pw, 1f, CORNER, BORDER)
 
             // 面板标题栏
             var panelModules: List<ClientModule>
             if (isSearching) {
-                // 搜索模式：汇集所有分类的结果
                 panelModules = categories.flatMap { getCategoryModules(it) }.distinct()
                 drawText(ctx, font, "§lSearch Results", (px + 8f).toInt(), (py + 5f).toInt(), ACCENT)
             } else {
-                // 正常模式：根据分类获取
                 val category = panel.category ?: continue
                 panelModules = getCategoryModules(category)
-                // 【修复点 3】：把 .name 换成枚举自带的 .tag
-                drawText(ctx, font, "§l${category.tag}", (px + 8f).toInt(), (py + 5f).toInt(), ACCENT)
+
+                // 【新增】收缩箭头指示
+                val arrow = if (panel.collapsed) "▶ " else "▼ "
+                drawText(ctx, font, "§l$arrow${category.tag}", (px + 8f).toInt(), (py + 5f).toInt(), ACCENT)
                 val lineWidth = font.width(category.tag) + 10f
                 fillRect(ctx, px + 8f, py + 18f, px + 8f + lineWidth, py + 19f, ACCENT_DARK)
             }
+
+            // 【新增】如果面板是折叠状态，跳过剩余内容渲染和滚动条绘制
+            if (panel.collapsed) continue
 
             // 计算滚动
             val headerH = 24f
@@ -310,11 +319,7 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
                         if (settingEndY >= listAreaY && curY <= listAreaY + listAreaH) {
                             val isSettingHover = mouseX in listAreaX.toInt()..(listAreaX + listAreaW).toInt() &&
                                     mouseY in curY.toInt()..settingEndY.toInt()
-
-                            if (isSettingHover) {
-                                fillRect(ctx, listAreaX, curY, listAreaX + listAreaW, settingEndY, HOVER)
-                            }
-
+                            if (isSettingHover) fillRect(ctx, listAreaX, curY, listAreaX + listAreaW, settingEndY, HOVER)
                             renderSetting(ctx, v, depth, listAreaX, curY, listAreaW, mouseX, mouseY)
                         }
                         curY += SETTING_H
@@ -359,7 +364,7 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
         }
     }
 
-    // ==================== Setting row renderer ====================
+    // ==================== Setting row renderer (文本超出自动省略号) ====================
 
     private fun renderSetting(
         ctx: GuiGraphicsExtractor, v: Value<*>, depth: Int,
@@ -371,29 +376,32 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
         val isGroup = isGroupValue(v)
         val labelX = (x + 6 + indent).toInt()
         val valueX = (x + w - 44).toInt()
+        val labelMaxW = (valueX - labelX - 4).coerceAtLeast(10) // 动态计算标签最大宽度
 
         when {
             isGroup -> {
                 val isCollapsed = collapsedGroups.contains(v)
                 val arrow = if (isCollapsed) "▶" else "▼"
-                drawText(ctx, font, "$arrow ${trimText(font, v.name, (w - 30 - indent).toInt())}",
+                drawText(ctx, font, "$arrow ${trimText(font, v.name, labelMaxW)}",
                     labelX, (y + 5f).toInt(), TEXT)
             }
             actual is Boolean -> {
-                drawText(ctx, font, trimText(font, v.name, (w - 50 - indent).toInt()),
+                drawText(ctx, font, trimText(font, v.name, labelMaxW),
                     labelX, (y + 5f).toInt(), TEXT_DIM)
                 val status = if (actual) "§aON" else "§cOFF"
                 drawText(ctx, font, status, valueX, (y + 5f).toInt(), if (actual) ACCENT else TEXT_DIM)
             }
             isBindValue(v) -> {
-                drawText(ctx, font, trimText(font, v.name, (w - 60 - indent).toInt()),
+                drawText(ctx, font, trimText(font, v.name, labelMaxW),
                     labelX, (y + 5f).toInt(), TEXT_DIM)
                 val isListening = listeningValue == v
-                val display = if (isListening) "§e[...]" else "§7${formatBindValue(v)}"
+                // 【修复】对格式化后的按键值进行截断
+                val bindStr = trimText(font, formatBindValue(v), (w - 60 - indent).toInt())
+                val display = if (isListening) "§e[...]" else "§7$bindStr"
                 drawText(ctx, font, display, valueX, (y + 5f).toInt(), if (isListening) ACCENT else TEXT_DIM)
             }
             isSliderValue(v) -> {
-                drawText(ctx, font, trimText(font, v.name, (w - 70 - indent).toInt()),
+                drawText(ctx, font, trimText(font, v.name, labelMaxW),
                     labelX, (y + 3f).toInt(), TEXT_DIM)
 
                 var fv = 0f; var minV = 0f; var maxV = 100f
@@ -415,18 +423,22 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
                 fillRect(ctx, sliderX + (sliderW * progress).toInt() - 1, sliderY - 1,
                     sliderX + (sliderW * progress).toInt() + 1, sliderY + 3, TEXT_BRIGHT)
 
-                drawText(ctx, font, "%.1f".format(fv), sliderX + sliderW + 3, (y + 3f).toInt(), TEXT_DIM)
+                // 【修复】数值区域长截断
+                val valText = trimText(font, "%.1f".format(fv), (w - 70 - indent).toInt())
+                drawText(ctx, font, valText, sliderX + sliderW + 3, (y + 3f).toInt(), TEXT_DIM)
             }
             isColorValue(v) -> {
-                drawText(ctx, font, trimText(font, v.name, (w - 50 - indent).toInt()),
+                drawText(ctx, font, trimText(font, v.name, labelMaxW),
                     labelX, (y + 5f).toInt(), TEXT_DIM)
                 val color = extractColor(v)
                 fillRect(ctx, valueX, y.toInt() + 4, valueX + 10, y.toInt() + 14, color.rgb)
             }
             else -> {
-                drawText(ctx, font, trimText(font, v.name, (w - 50 - indent).toInt()),
+                drawText(ctx, font, trimText(font, v.name, labelMaxW),
                     labelX, (y + 5f).toInt(), TEXT_DIM)
-                drawText(ctx, font, "§7${getDisplayValue(v)}", valueX, (y + 5f).toInt(), TEXT_DIM)
+                // 【修复】枚举或常规数值长截断
+                val valText = trimText(font, getDisplayValue(v), (w - 50 - indent).toInt())
+                drawText(ctx, font, "§7$valText", valueX, (y + 5f).toInt(), TEXT_DIM)
             }
         }
     }
@@ -461,15 +473,20 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
             }
         }
 
-        // 【新增】拖动面板头部
+        // 【新增】面板头部处理：左键拖拽，右键折叠
         if (targetPanel != null) {
             val headerY = targetPanel.y
             val headerH = 24f
             if (my in headerY.toInt()..(headerY + headerH).toInt()) {
-                targetPanel.draggingPanel = true
-                targetPanel.dragOffsetX = mx - targetPanel.x
-                targetPanel.dragOffsetY = my - targetPanel.y
-                return true
+                if (btn == 1) { // 右键：切换折叠状态
+                    targetPanel.collapsed = !targetPanel.collapsed
+                    return true
+                } else if (btn == 0) { // 左键：拖拽面板
+                    targetPanel.draggingPanel = true
+                    targetPanel.dragOffsetX = mx - targetPanel.x
+                    targetPanel.dragOffsetY = my - targetPanel.y
+                    return true
+                }
             }
         }
 
@@ -477,6 +494,9 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
         if (targetPanel == null) return true
 
         val panel = targetPanel!!
+        // 【新增】：如果面板已折叠，禁止点击内部模块
+        if (panel.collapsed) return true
+
         val listAreaX = panel.x + PADDING
         val listAreaW = panel.w - PADDING * 2 - SCROLL_W
         val listAreaY = panel.y + 28f
@@ -551,6 +571,12 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
             if (panel.draggingPanel) {
                 panel.x = mx - panel.dragOffsetX
                 panel.y = my - panel.dragOffsetY
+                // 将拖动的面板移到渲染列表末尾（显示在最上层）
+                val idx = panels.indexOf(panel)
+                if (idx >= 0 && idx < panels.size - 1) {
+                    panels.removeAt(idx)
+                    panels.add(panel)
+                }
                 return true
             }
 
@@ -641,6 +667,8 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
     override fun mouseScrolled(mouseX: Double, mouseY: Double, horizontal: Double, vertical: Double): Boolean {
         // 查找鼠标当前悬浮的面板
         for (panel in panels) {
+            // 【新增】：如果面板已折叠，禁止滚轮操作
+            if (panel.collapsed) continue
             if (mouseX in panel.x.toDouble()..(panel.x + panel.w).toDouble() &&
                 mouseY in panel.y.toDouble()..(panel.y + panel.h).toDouble()) {
                 panel.targetScroll = (panel.targetScroll - vertical.toFloat() * 20f).coerceAtLeast(0f)
