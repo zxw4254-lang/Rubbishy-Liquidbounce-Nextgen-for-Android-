@@ -12,7 +12,7 @@ import net.minecraft.client.gui.GuiGraphicsExtractor
 import net.minecraft.client.input.MouseButtonEvent
 import net.minecraft.client.input.KeyEvent
 import net.minecraft.client.input.CharacterEvent
-import net.minecraft.client.input.MouseDragEvent
+// 【修复点 2】：删除不存在的 MouseDragEvent import
 import net.minecraft.network.chat.Component
 import org.lwjgl.glfw.GLFW
 import java.awt.Color
@@ -541,10 +541,8 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
         return true // 【增强】强制拦截所有内部点击，防止掉落物品等原版操作
     }
 
-    // 【新增】鼠标拖拽处理
-    override fun mouseDragged(event: MouseDragEvent): Boolean {
-        val dx = event.dragX()
-        val dy = event.dragY()
+    // 【修复点 2】：方法签名修正为 MouseButtonEvent, dx: Double, dy: Double
+    override fun mouseDragged(event: MouseButtonEvent, dx: Double, dy: Double): Boolean {
         val mx = event.x().toFloat()
         val my = event.y().toFloat()
 
@@ -563,6 +561,7 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
                 val listAreaH = panel.h - 32f
                 if (contentH > listAreaH) {
                     val maxScroll = contentH - listAreaH
+                    // 修改为直接使用参数 dx 和 dy 的转换
                     panel.targetScroll = (panel.targetScroll - dy.toFloat() * 1.2f).coerceIn(0f, maxScroll)
                 }
                 return true
