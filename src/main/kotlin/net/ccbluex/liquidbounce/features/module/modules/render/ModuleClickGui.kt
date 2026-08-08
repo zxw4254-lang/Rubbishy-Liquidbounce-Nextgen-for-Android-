@@ -23,81 +23,61 @@ import net.ccbluex.liquidbounce.event.events.KeyboardKeyEvent
 import net.ccbluex.liquidbounce.event.handler
 import org.lwjgl.glfw.GLFW
 
-/**
- * ClickGUI 模块 — 安卓原生版
- *
- * 直接加载纯 Kotlin ClickGuiScreen，不依赖任何 Web/Browser 后端。
- * 适配 PojavLauncher / RubbishBounce 安卓环境。
- */
 object ModuleClickGui :
     ClientModule("ClickGUI", ModuleCategories.RENDER, bind = GLFW.GLFW_KEY_RIGHT_SHIFT, disableActivation = true) {
 
     override val running get() = true
 
-    /**
-     * 全局按键监听：右 Shift (keyCode=344) 或 Android 映射 keyCode=54
-     * 仅在没有其他 Screen 打开时触发。
-     */
+    /** 关闭保护标志：onClose 设为 false 后，框架即使调用 onEnabled 也不会重新打开 */
+    @Volatile
+    private var allowOpen = true
+
     @Suppress("unused")
     private val keyHandler = handler<KeyboardKeyEvent> { event ->
         if (event.action == 1 &&
             (event.keyCode == GLFW.GLFW_KEY_RIGHT_SHIFT || event.keyCode == 54) &&
             mc.gui.screen() == null
         ) {
+            allowOpen = true
             openGui()
         }
     }
 
     override fun onEnabled() {
+        if (!allowOpen) return
         openGui()
         super.onEnabled()
     }
 
-    /**
-     * 以多重兜底方式打开 ClickGuiScreen。
-     * Android 环境上 setScreen 方法名可能因映射不同而变化，
-     * 此处同时尝试多种调用方式确保必然生效。
-     */
+    /** ClickGuiScreen.onClose 会调用此方法，防止框架重新激活 */
+    fun requestClose() {
+        allowOpen = false
+    }
+
+    /** 下次打开时重置标志 */
+    fun resetAllowOpen() {
+        allowOpen = true
+    }
+
     private fun openGui() {
+        allowOpen = true
         val screen = ClickGuiScreen()
         try {
             mc.gui.setScreen(screen)
             return
-        } catch (_: NoSuchMethodError) {
-            // Fabric 不同版本可能映射名不同
-        }
+        } catch (_: NoSuchMethodError) { }
         try {
             mc.javaClass.getMethod("setScreen", net.minecraft.client.gui.screens.Screen::class.java)
                 ?.invoke(mc, screen)
             return
-        } catch (_: Exception) {
-            // 忽略
-        }
-        // 兜底：dispatch 到主线程
+        } catch (_: Exception) { }
         mc.execute {
             mc.gui.setScreen(screen)
         }
     }
 
-    /**
-     * 兼容旧调用 —— 新 GUI 为即时渲染，无需浏览器同步。
-     */
     fun sync() {}
-
-    /**
-     * 兼容旧调用 —— 新 GUI 无缓存屏幕，无需失效重建。
-     */
     fun invalidate() {}
-
-    /**
-     * 兼容旧调用 —— 新 GUI 无搜索栏聚焦状态。
-     * 始终返回 false，避免干扰其他输入。
-     */
-    val isInSearchBar: Boolean
-        get() = false
-
-    /**
-     * 兼容旧调用 —— 返回 false，防止触发独立屏幕更新逻辑。
-     */
+    val isInSearchBar: Boolean get() = false
     fun updateStandaloneScreen(): Boolean = false
 }
