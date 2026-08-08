@@ -473,6 +473,18 @@ object LiquidBounce : EventListener {
             logger.info("Refresh Rate: ${mc.window.refreshRate} Hz")
 
             EventManager
+             if (ANDROID_BUILD) {
+                    try {
+                    // 使用 Java 反射，强行从事件总线中移除 ScreenManager
+                    val screenManagerClass = Class.forName("net.ccbluex.liquidbounce.integration.screen.ScreenManager")
+                    val instance = screenManagerClass.getDeclaredField("INSTANCE").get(null) as EventListener
+                    EventManager.unregisterEventHandler(instance)
+                    logger.info("[Android] 成功注销 ScreenManager，彻底阻止 WebUI 报错。")
+                } catch (e: Exception) {
+                    // 如果移除失败，也不影响游戏核心运行
+                    logger.warn("[Android] 注销 ScreenManager 失败: ${e.message}")
+                }
+}            
 
             // ==========================================================
             // 【已移除】：原驱动钩子 (ClientTickEvent) 在 0.39 中需要额外参数，
