@@ -78,4 +78,26 @@ object ModuleClickGui :
             mc.gui.setScreen(screen)
         }
     }
+
+    /**
+     * 兼容旧调用 —— 新 GUI 为即时渲染，无需浏览器同步。
+     */
+    fun sync() {}
+
+    /**
+     * 兼容旧调用 —— 新 GUI 无缓存屏幕，无需失效重建。
+     */
+    fun invalidate() {}
+
+    /**
+     * 兼容旧调用 —— 新 GUI 无搜索栏聚焦状态。
+     * 始终返回 false，避免干扰其他输入。
+     */
+    val isInSearchBar: Boolean
+        get() = false
+
+    /**
+     * 兼容旧调用 —— 返回 false，防止触发独立屏幕更新逻辑。
+     */
+    fun updateStandaloneScreen(): Boolean = false
 }
