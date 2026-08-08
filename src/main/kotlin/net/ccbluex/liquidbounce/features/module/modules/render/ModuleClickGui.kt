@@ -36,15 +36,19 @@ object ModuleClickGui :
 
     /**
      * 全局按键监听：右 Shift (keyCode=344) 或 Android 映射 keyCode=54
-     * 仅在没有其他 Screen 打开时触发。
+     * 【完美开/关切换】：如果当前屏幕为空则打开，如果当前已打开则关闭。
      */
     @Suppress("unused")
     private val keyHandler = handler<KeyboardKeyEvent> { event ->
         if (event.action == 1 &&
-            (event.keyCode == GLFW.GLFW_KEY_RIGHT_SHIFT || event.keyCode == 54) &&
-            mc.gui.screen() == null
+            (event.keyCode == GLFW.GLFW_KEY_RIGHT_SHIFT || event.keyCode == 54)
         ) {
-            openGui()
+            val currentScreen = mc.gui.screen()
+            if (currentScreen == null) {
+                openGui()
+            } else if (currentScreen is ClickGuiScreen) {
+                closeGui()
+            }
         }
     }
 
@@ -80,6 +84,30 @@ object ModuleClickGui :
     }
 
     /**
+     * 【新增】：以多重兜底方式关闭 ClickGuiScreen。
+     * 采用和 openGui 完全一样的反射兜底逻辑，确保在任何版本都能完美关掉界面。
+     */
+    private fun closeGui() {
+        try {
+            mc.gui.setScreen(null)
+            return
+        } catch (_: NoSuchMethodError) {
+            // 忽略
+        }
+        try {
+            mc.javaClass.getMethod("setScreen", net.minecraft.client.gui.screens.Screen::class.java)
+                ?.invoke(mc, null)
+            return
+        } catch (_: Exception) {
+            // 忽略
+        }
+        // 兜底：dispatch 到主线程
+        mc.execute {
+            mc.gui.setScreen(null)
+        }
+    }
+
+    /**
      * 兼容旧调用 —— 新 GUI 为即时渲染，无需浏览器同步。
      */
     fun sync() {}
@@ -100,4 +128,4 @@ object ModuleClickGui :
      * 兼容旧调用 —— 返回 false，防止触发独立屏幕更新逻辑。
      */
     fun updateStandaloneScreen(): Boolean = false
-}
+    }
