@@ -24,13 +24,9 @@ import net.ccbluex.liquidbounce.event.handler
 import org.lwjgl.glfw.GLFW
 
 object ModuleClickGui :
-    ClientModule("ClickGUI", ModuleCategories.RENDER, bind = GLFW.GLFW_KEY_RIGHT_SHIFT, disableActivation = true) {
+    ClientModule("ClickGUI", ModuleCategories.RENDER, bind = GLFW.GLFW_KEY_RIGHT_SHIFT) {
 
     override val running get() = true
-
-    /** 关闭保护标志：onClose 设为 false 后，框架即使调用 onEnabled 也不会重新打开 */
-    @Volatile
-    private var allowOpen = true
 
     @Suppress("unused")
     private val keyHandler = handler<KeyboardKeyEvent> { event ->
@@ -38,41 +34,27 @@ object ModuleClickGui :
             (event.keyCode == GLFW.GLFW_KEY_RIGHT_SHIFT || event.keyCode == 54) &&
             mc.gui.screen() == null
         ) {
-            allowOpen = true
             openGui()
         }
     }
 
     override fun onEnabled() {
-        if (!allowOpen) return
         openGui()
         super.onEnabled()
     }
 
-    /** ClickGuiScreen.onClose 会调用此方法，防止框架重新激活 */
-    fun requestClose() {
-        allowOpen = false
-    }
-
-    /** 下次打开时重置标志 */
-    fun resetAllowOpen() {
-        allowOpen = true
-    }
-
     private fun openGui() {
-        allowOpen = true
-        val screen = ClickGuiScreen()
         try {
-            mc.gui.setScreen(screen)
+            mc.gui.setScreen(ClickGuiScreen())
             return
         } catch (_: NoSuchMethodError) { }
         try {
             mc.javaClass.getMethod("setScreen", net.minecraft.client.gui.screens.Screen::class.java)
-                ?.invoke(mc, screen)
+                ?.invoke(mc, ClickGuiScreen())
             return
         } catch (_: Exception) { }
         mc.execute {
-            mc.gui.setScreen(screen)
+            mc.gui.setScreen(ClickGuiScreen())
         }
     }
 
