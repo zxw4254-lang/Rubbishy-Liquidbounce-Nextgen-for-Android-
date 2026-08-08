@@ -31,10 +31,14 @@ object ModuleClickGui :
     @Suppress("unused")
     private val keyHandler = handler<KeyboardKeyEvent> { event ->
         if (event.action == 1 &&
-            (event.keyCode == GLFW.GLFW_KEY_RIGHT_SHIFT || event.keyCode == 54) &&
-            mc.gui.screen() == null
+            (event.keyCode == GLFW.GLFW_KEY_RIGHT_SHIFT || event.keyCode == 54)
         ) {
-            openGui()
+            val currentScreen = mc.gui.screen()
+            if (currentScreen == null) {
+                openGui()
+            } else if (currentScreen is ClickGuiScreen) {
+                closeGui()
+            }
         }
     }
 
@@ -58,8 +62,26 @@ object ModuleClickGui :
         }
     }
 
+    /**
+     * 【新增】与 openGui 采用完全相同的反射兜底逻辑，保证能安全关屏。
+     */
+    private fun closeGui() {
+        try {
+            mc.gui.setScreen(null)
+            return
+        } catch (_: NoSuchMethodError) { }
+        try {
+            mc.javaClass.getMethod("setScreen", net.minecraft.client.gui.screens.Screen::class.java)
+                ?.invoke(mc, null)
+            return
+        } catch (_: Exception) { }
+        mc.execute {
+            mc.gui.setScreen(null)
+        }
+    }
+
     fun sync() {}
     fun invalidate() {}
     val isInSearchBar: Boolean get() = false
     fun updateStandaloneScreen(): Boolean = false
-}
+    }
