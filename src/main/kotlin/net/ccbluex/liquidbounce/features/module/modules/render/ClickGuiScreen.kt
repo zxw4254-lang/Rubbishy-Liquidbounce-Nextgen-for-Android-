@@ -4,6 +4,7 @@ import net.ccbluex.liquidbounce.config.types.RangedValue
 import net.ccbluex.liquidbounce.config.types.Value
 import net.ccbluex.liquidbounce.features.module.ClientModule
 import net.ccbluex.liquidbounce.features.module.ModuleCategory
+import net.ccbluex.liquidbounce.features.module.ModuleCategories // 【修复1】：导入正确的枚举容器
 import net.ccbluex.liquidbounce.features.module.ModuleManager
 import net.minecraft.client.gui.screens.Screen
 import net.minecraft.client.gui.Font
@@ -14,7 +15,7 @@ import net.minecraft.client.input.CharacterEvent
 import net.minecraft.network.chat.Component
 import org.lwjgl.glfw.GLFW
 import java.awt.Color
-import java.util.IdentityHashMap // 【修复点 7 & 8】：补全 IdentityHashMap 导入
+import java.util.IdentityHashMap
 import kotlin.math.cos
 import kotlin.math.max
 import kotlin.math.sin
@@ -63,8 +64,8 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
     private var fadeAnim = 0f
 
     // 所有分类面板的列表
-    // 【修复点 1】：ModuleCategories 替换为 ModuleCategory，并修正 HIDDEN 枚举
-    private val categories = ModuleCategory.entries.filter { it != ModuleCategory.HIDDEN }
+    // 【修复点 2】：使用 ModuleCategories.entries 获取枚举列表，并移除不存在的 HIDDEN 过滤
+    private val categories = ModuleCategories.entries.toList()
 
     private data class PanelData(
         val category: ModuleCategory?,
@@ -139,7 +140,6 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
         return if (str.isEmpty()) "..." else "$str..."
     }
 
-    // 【修复点 3】：参数类型由 ModuleCategories 改为 ModuleCategory
     private fun getCategoryModules(category: ModuleCategory): List<ClientModule> {
         return try {
             ModuleManager.getModules().toList()
@@ -245,10 +245,9 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
                 // 正常模式：根据分类获取
                 val category = panel.category ?: continue
                 panelModules = getCategoryModules(category)
-                // 【修复点 4】：cat.tag 改为 cat.name
-                drawText(ctx, font, "§l${category.name}", (px + 8f).toInt(), (py + 5f).toInt(), ACCENT)
-                // 【修复点 5】：mod.category.tag 改为 mod.category.name
-                val lineWidth = font.width(category.name) + 10f
+                // 【修复点 3】：把 .name 换成枚举自带的 .tag
+                drawText(ctx, font, "§l${category.tag}", (px + 8f).toInt(), (py + 5f).toInt(), ACCENT)
+                val lineWidth = font.width(category.tag) + 10f
                 fillRect(ctx, px + 8f, py + 18f, px + 8f + lineWidth, py + 19f, ACCENT_DARK)
             }
 
@@ -531,7 +530,6 @@ class ClickGuiScreen : Screen(Component.literal("ClickGUI")) {
         return if (searchText.isNotEmpty()) {
             categories.flatMap { getCategoryModules(it) }.distinct()
         } else {
-            // 【修复点 6】：it 自动推断为 ModuleCategory，完美适配更新后的函数签名
             panel.category?.let { getCategoryModules(it) } ?: emptyList()
         }
     }
