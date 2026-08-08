@@ -24,7 +24,7 @@ import net.ccbluex.liquidbounce.event.handler
 import org.lwjgl.glfw.GLFW
 
 /**
- * ClickGUI 模块 — 安卓原生版（开关 + 事件拦截版）
+ * ClickGUI 模块 — 安卓原生版
  *
  * 直接加载纯 Kotlin ClickGuiScreen，不依赖任何 Web/Browser 后端。
  * 适配 PojavLauncher / RubbishBounce 安卓环境。
@@ -36,22 +36,15 @@ object ModuleClickGui :
 
     /**
      * 全局按键监听：右 Shift (keyCode=344) 或 Android 映射 keyCode=54
-     * 【重大修复】：将 cancelEvent() 替换为 cancel()，彻底阻断事件向原版 WebUI 传播。
+     * 仅在没有其他 Screen 打开时触发。
      */
     @Suppress("unused")
     private val keyHandler = handler<KeyboardKeyEvent> { event ->
         if (event.action == 1 &&
-            (event.keyCode == GLFW.GLFW_KEY_RIGHT_SHIFT || event.keyCode == 54)
+            (event.keyCode == GLFW.GLFW_KEY_RIGHT_SHIFT || event.keyCode == 54) &&
+            mc.gui.screen() == null
         ) {
-            // 【修复点】：使用标准的事件取消方法
-            event.cancel()
-            
-            val currentScreen = mc.gui.screen()
-            if (currentScreen == null) {
-                openGui()
-            } else if (currentScreen is ClickGuiScreen) {
-                closeGui()
-            }
+            openGui()
         }
     }
 
@@ -87,29 +80,6 @@ object ModuleClickGui :
     }
 
     /**
-     * 以多重兜底方式关闭 ClickGuiScreen。
-     * 与 openGui 使用完全一样的反射逻辑，确保能正确置空屏幕。
-     */
-    private fun closeGui() {
-        try {
-            mc.gui.setScreen(null)
-            return
-        } catch (_: NoSuchMethodError) {
-            // 忽略
-        }
-        try {
-            mc.javaClass.getMethod("setScreen", net.minecraft.client.gui.screens.Screen::class.java)
-                ?.invoke(mc, null)
-            return
-        } catch (_: Exception) {
-            // 忽略
-        }
-        mc.execute {
-            mc.gui.setScreen(null)
-        }
-    }
-
-    /**
      * 兼容旧调用 —— 新 GUI 为即时渲染，无需浏览器同步。
      */
     fun sync() {}
@@ -130,4 +100,4 @@ object ModuleClickGui :
      * 兼容旧调用 —— 返回 false，防止触发独立屏幕更新逻辑。
      */
     fun updateStandaloneScreen(): Boolean = false
-    }
+}
