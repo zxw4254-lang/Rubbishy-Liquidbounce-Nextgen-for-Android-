@@ -407,3 +407,13 @@ tasks.named<Jar>("sourcesJar") {
 tasks.named("build") {
     dependsOn("copyZipInclude")
 }
+// ==========================================
+// 【禁用前端加载任务】（彻底解决 EUSAGE 错误）
+// ==========================================
+tasks.named("npmInstallTheme") {
+    enabled = false
+}
+tasks.named("buildTheme") {
+    enabled = false
+}
+// 把之前 processResources 里 `dependsOn("buildTheme")` 的注释检查一下，确保它被注释掉了
