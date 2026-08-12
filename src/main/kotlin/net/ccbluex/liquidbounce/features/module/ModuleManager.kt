@@ -211,6 +211,7 @@ import net.ccbluex.liquidbounce.features.module.modules.render.ModuleItemTags
 import net.ccbluex.liquidbounce.features.module.modules.render.ModuleJumpEffect
 import net.ccbluex.liquidbounce.features.module.modules.render.ModuleLogoffSpot
 import net.ccbluex.liquidbounce.features.module.modules.render.ModuleMobOwners
+import net.ccbluex.liquidbounce.features.module.modules.render.ModuleModernClickGui
 import net.ccbluex.liquidbounce.features.module.modules.render.ModuleNewChunks
 import net.ccbluex.liquidbounce.features.module.modules.render.ModuleNoBob
 import net.ccbluex.liquidbounce.features.module.modules.render.ModuleNoFov
@@ -225,6 +226,7 @@ import net.ccbluex.liquidbounce.features.module.modules.render.ModuleRotations
 import net.ccbluex.liquidbounce.features.module.modules.render.ModuleSilentHotbar
 import net.ccbluex.liquidbounce.features.module.modules.render.ModuleSkinChanger
 import net.ccbluex.liquidbounce.features.module.modules.render.ModuleSmoothCamera
+import net.ccbluex.liquidbounce.features.module.modules.render.ModuleSolsticeNotifications
 import net.ccbluex.liquidbounce.features.module.modules.render.ModuleStorageESP
 import net.ccbluex.liquidbounce.features.module.modules.render.ModuleTNTTimer
 import net.ccbluex.liquidbounce.features.module.modules.render.ModuleTracers
