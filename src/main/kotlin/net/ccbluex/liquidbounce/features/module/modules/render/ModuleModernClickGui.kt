@@ -189,14 +189,8 @@ object ModuleModernClickGui : ClientModule(
         v.javaClass.simpleName.contains("Group", true) || v.javaClass.simpleName.contains("Container", true)
     } catch (_: Exception) { false }
 
-    @Suppress("unchecked_cast")
-    private fun groupChildren(v: Value<*>): List<Value<*>> = try {
-        v.javaClass.methods.firstOrNull { it.name == "getChildren" || it.name == "children" }
-            ?.invoke(v) as? List<Value<*>> ?: emptyList()
-    } catch (_: Exception) { emptyList() }
-
     private fun collectValues(module: ClientModule): List<Value<*>> = try {
-        module.collectValuesRecursively()
+        module.collectValuesRecursively().toList()
     } catch (_: Exception) { emptyList() }
 
     /* ============================= 事件处理 ============================= */
@@ -243,7 +237,6 @@ object ModuleModernClickGui : ClientModule(
         if (!enabled) return@handler
         val mx = guiMouseX()
         val my = guiMouseY()
-        mouseDown = event.action == 1
 
         // 调色板优先
         val colorVal = activeColorValue
@@ -474,8 +467,8 @@ object ModuleModernClickGui : ClientModule(
         if (expanded != null && expanded.category == cat) {
             contentH += collectValues(expanded).size * itemHeight
         }
-        val maxScroll = max(0f, contentH - (panelMaxHeight - headerHeight))
-        panel.targetScroll = panel.targetScroll.coerceIn(0f, maxScroll.toFloat())
+        val maxScroll = max(0f, (contentH - (panelMaxHeight - headerHeight)).toFloat())
+        panel.targetScroll = panel.targetScroll.coerceIn(0f, maxScroll)
 
         var curY = listY
         for (mod in modules) {
